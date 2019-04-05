@@ -244,8 +244,6 @@ class TotalDatasetsLoader(data.Dataset):
         t = self.triplets[idx] # idx is index of sample
         a, p = self.data[t[0]], self.data[t[1]] # t[2] would be negative, not used
 
-        if self.all_txts[t[0]] in self.transform_dict.keys():
-            print('its a hit')
         img_a = transform_img(a, self.transform_dict[self.all_txts[t[0]]] if self.all_txts[t[0]] in self.transform_dict.keys() else self.default_transform)
         img_p = transform_img(p, self.transform_dict[self.all_txts[t[1]]] if self.all_txts[t[1]] in self.transform_dict.keys() else self.default_transform)
 
