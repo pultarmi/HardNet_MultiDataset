@@ -410,7 +410,7 @@ class TripletPhotoTour(dset.PhotoTour):
             return self.matches.size(0)
 
 
-def test(test_loader, model, epoch, logger, logger_test_name, args):
+def test(test_loader, model, epoch, logger_test_name, args):
     model.eval()
 
     labels, distances = [], []

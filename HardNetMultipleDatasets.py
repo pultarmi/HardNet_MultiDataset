@@ -15,20 +15,15 @@ If you use this code, please cite
 
 from __future__ import division, print_function
 from copy import deepcopy
-import random, cv2, copy, os, sys, torch, argparse, PIL
+import random, os, sys, torch, argparse, PIL
 import torch.nn.init
-import torch.nn as nn
-import torch.optim as optim
-import torchvision.datasets as dset
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 import numpy as np
-from EvalMetrics import ErrorRateAt95Recall#, ErrorRateFDRAt95Recall, convertFDR2FPR, convertFPR2FDR
 from Losses import loss_HardNet, loss_random_sampling, loss_L2Net, global_orthogonal_regularization
-from W1BS import w1bs_extract_descs_and_save
-from Utils import adjust_learning_rate, HardNet, TripletPhotoTour, create_optimizer, L2Norm, cv2_scale, np_reshape32, np_reshape64, str2bool, test, HardNetPS
+from Utils import adjust_learning_rate, HardNet, TripletPhotoTour, create_optimizer, L2Norm, cv2_scale, str2bool, test, HardNetPS
 from HandCraftedModules import get_WF_from_string
 import torch.nn as nn
 from WBSDataset import WBSDataset
@@ -318,7 +313,7 @@ def create_loaders(load_random_triplets=False):
 
     return train_loader, test_loaders
 
-def train(train_loader, model, optimizer, epoch, logger, load_triplets=False, WBSLoader=None):
+def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
     model.train()
 
     pbar = tqdm(enumerate(train_loader))
@@ -371,8 +366,6 @@ def train(train_loader, model, optimizer, epoch, logger, load_triplets=False, WB
         if args.separate_amos:
             fce(pom_a, pom_p, change_lr=False)
 
-    # if (args.enable_logging):
-    #     logger.log_value('loss', loss.data[0]).step()
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
 
     save_path = '{}{}/checkpoint_{}.pth'.format(args.model_dir, save_name, epoch)
@@ -386,7 +379,7 @@ def print_lr(optimizer):
         print( "Learning rate: " +str(group['lr']) )
         return
 
-def main(train_loader, test_loaders, model, logger, file_logger):
+def main(train_loader, test_loaders, model):
     print('\nparsed options:\n{}\n'.format(vars(args)))
     model.cuda()
 
@@ -398,17 +391,12 @@ def main(train_loader, test_loaders, model, logger, file_logger):
         path_resume = None
 
         if os.path.isfile(p1):
-            # print('=> no checkpoint found at {}'.format(os.path.join(os.getcwd(), args.resume)))
-            # path_resume = os.path.join(args.model_dir, args.resume)
             path_resume = p1
         elif os.path.isfile(p2):
-            # print('=> no checkpoint found at {}'.format(os.path.join(os.getcwd(), args.resume)))
-            # path_resume = os.path.join(args.model_dir, args.resume)
             path_resume = p2
         elif os.path.exists(p2):
             print('searching dir')
             path_resume = os.path.join(p2, get_last_checkpoint(p2))
-            # print('path exists, last checkpoint found: {}'.format(path_resume))
 
         if path_resume is not None:
             print('=> loading checkpoint {}'.format(path_resume))
@@ -433,7 +421,6 @@ def main(train_loader, test_loaders, model, logger, file_logger):
                     print('optimizer not loaded')
         else:
             print('=> no checkpoint found')
-            # print('=> no checkpoint found at {}'.format(path_resume))
 
     start = args.start_epoch
     end = start + args.epochs
@@ -441,46 +428,17 @@ def main(train_loader, test_loaders, model, logger, file_logger):
         WBSLoader = None
         if args.tower_dataset != '':
             WBSLoader = create_loader_WBSDataset( load_random_triplets=triplet_flag )
-        train(train_loader, model, optimizer1, epoch, logger, triplet_flag, WBSLoader=WBSLoader)
+        train(train_loader, model, optimizer1, epoch, triplet_flag, WBSLoader=WBSLoader)
 
         for test_loader in test_loaders:
-            test( test_loader['dataloader'], model, epoch, logger, test_loader['name'], args )
-
-        if TEST_ON_W1BS:
-            patch_images = w1bs.get_list_of_patch_images( DATASET_DIR=args.w1bsroot.replace('/code', '/data/W1BS') )
-            desc_name = 'curr_desc'  # + str(random.randint(0,100))
-
-            DESCS_DIR = LOG_DIR + '/temp_descs/'  # args.w1bsroot.replace('/code', "/data/out_descriptors")
-            OUT_DIR = DESCS_DIR.replace('/temp_descs/', "/out_graphs/")
-
-            for img_fname in patch_images:
-                w1bs_extract_descs_and_save( img_fname, model, desc_name, cuda=args.cuda, mean_img=args.mean_image, std_img=args.std_image, out_dir=DESCS_DIR )
-
-            force_rewrite_list = [desc_name]
-            w1bs.match_descriptors_and_save_results( DESC_DIR=DESCS_DIR, do_rewrite=True, dist_dict={}, force_rewrite_list=force_rewrite_list)
-            if (args.enable_logging):
-                w1bs.draw_and_save_plots_with_loggers( DESC_DIR=DESCS_DIR, OUT_DIR=OUT_DIR,  methods=["SNN_ratio"], descs_to_draw=[desc_name], logger=file_logger, tensor_logger=logger )
-            else:
-                w1bs.draw_and_save_plots( DESC_DIR=DESCS_DIR, OUT_DIR=OUT_DIR, methods=["SNN_ratio"], descs_to_draw=[desc_name] )
+            test( test_loader['dataloader'], model, epoch, test_loader['name'], args )
 
 if __name__ == '__main__':
-    LOG_DIR = args.log_dir
-    if not os.path.isdir(LOG_DIR):
-        os.makedirs(LOG_DIR)
-    LOG_DIR = os.path.join(args.log_dir, save_name)
-    DESCS_DIR = os.path.join(LOG_DIR, 'temp_descs')
-    if TEST_ON_W1BS:
-        if not os.path.isdir(DESCS_DIR):
-            os.makedirs(DESCS_DIR)
-    logger, file_logger = None, None
     model = HardNet()
-    if (args.enable_logging):
-        from Loggers import Logger
-        logger = Logger(LOG_DIR)
     train_loader, test_loaders = create_loaders( load_random_triplets=triplet_flag )
 
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
-    main(train_loader, test_loaders, model, logger, file_logger)
+    main(train_loader, test_loaders, model)
     print('Train end, saved: {}'.format(save_name))
     send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful fo training, change the recipient address for yours or comment this out
