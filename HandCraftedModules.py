@@ -1,8 +1,7 @@
-import torch
+import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import math
 import numpy as np
 from Utils import  GaussianBlur, CircularGaussKernel
 from LAF import abc2A,rectifyAffineTransformationUpIsUp, sc_y_x2LAFs
