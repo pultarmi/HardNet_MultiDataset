@@ -631,7 +631,7 @@ class DS_wrapper():
         loaders = []
         for c in self.datasets:
             if c.format == FORMAT.Brown:
-                loaders += [TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=self.batch_size, dataset_path=os.path.abspath(c.path), fliprot=self.fliprot,
+                loaders += [TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=c.batch_size, dataset_path=os.path.abspath(c.path), fliprot=c.fliprot,
                                                 n_tuples=self.n_tuples, transform_dict=c.transform_dict, group_id=c.group_id)]
             elif c.format == FORMAT.AMOS:
                 loaders += [WBSDataset(root=c.tower_dataset, split_name=c.split_name, n_patch_sets=c.n_patch_sets,
@@ -646,7 +646,7 @@ class DS_wrapper():
             sum_of_sizes = sum([c.batch_size for c in rel_loaders])
             for loader in rel_loaders:
                 loader.pom_batch_size = int((loader.batch_size / sum_of_sizes) * self.batch_size)
-                print(loader.pom_batch_size, loader.batch_size, (loader.batch_size / sum_of_sizes))
+                # print(loader.pom_batch_size, loader.batch_size, (loader.batch_size / sum_of_sizes))
                 loader.n_tuples = int(loader.n_tuples * (loader.pom_batch_size / self.batch_size))
             self.gid_to_loaders[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.pom_batch_size, shuffle=False, **kwargs)) for c in rel_loaders]
 
