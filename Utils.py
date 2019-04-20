@@ -646,6 +646,7 @@ class DS_wrapper():
             sum_of_sizes = sum([c.batch_size for c in rel_loaders])
             for loader in rel_loaders:
                 loader.pom_batch_size = int((loader.batch_size / sum_of_sizes) * self.batch_size)
+                print(loader.pom_batch_size, loader.batch_size, (loader.batch_size / sum_of_sizes))
                 loader.n_tuples = int(loader.n_tuples * (loader.pom_batch_size / self.batch_size))
             self.gid_to_loaders[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.pom_batch_size, shuffle=False, **kwargs)) for c in rel_loaders]
 
