@@ -92,7 +92,6 @@ parser.add_argument('--regen-each-iter', type=str2bool, default=False, help='Reg
 # parser.add_argument('--new-patches', type=int, default=0, help='Use new method to generate patches')
 parser.add_argument('--masks-dir', type=str, default=None, help='you can specify where masks are saved')
 parser.add_argument('--mark-patches-dir', type=str, default=None, help='you can specify where masks are saved')
-# parser.add_argument('--new-angles', type=int, default=0, help='you can specify where masks are saved')
 parser.add_argument('--cams-in-batch', type=int, default=0, help='you can specify where masks are saved')
 
 parser.add_argument('--patch-gen', type=str, default='oneRes', help='options: oneImg, sumImg, watchGood')
@@ -112,7 +111,6 @@ txt += ['PS:'+str(args.n_patch_sets)+'PP']
 txt += ['WF:'+args.weight_function]
 txt += ['PG:'+args.patch_gen]
 txt += ['masks:'+str(int(args.masks_dir is not None))]
-# txt += ['ang:'+str(args.new_angles)]
 txt += ['spx:'+str(args.spx)]
 txt += ['spy:'+str(args.spy)]
 split_name = '_'.join(txt)
@@ -159,25 +157,14 @@ def t(img):
         transforms.ToTensor(),
     ])(img)
     return img.type(torch.float64)
-easy_transform={'e1':t, 'e2':t, 'e3':t, 'default':transform}
+normal_transform={'default':transform}
+# easy_transform={'e1':t, 'e2':t, 'e3':t, 'default':transform}
 
 transform_AMOS = transforms.Compose([transforms.ToPILImage(),
                                      transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BICUBIC),
                                      transforms.CenterCrop(64),
                                      transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
                                      transforms.ToTensor()])
-
-# def create_loader_WBSDataset():
-#     kwargs = {'num_workers': 1, 'pin_memory': True}
-#
-#     train_loader = torch.utils.data.DataLoader(
-#         WBSDataset(root=args.tower_dataset, train=True, split_name=split_name, with_mask=False, n_patch_sets=args.n_patch_sets, n_positives=args.n_positives,
-#             patch_size=96, weight_function=WF, grayscale=True, weight_merge='Average', max_tilt=1.0, border=5, download=False, overwrite=args.regen_each_iter,
-#             n_pairs=args.n_triplets, batch_size=args.batch_size, fliprot=args.fliprot, transform=transform_AMOS, new_angles=args.new_angles,
-#             cams_in_batch=args.cams_in_batch, patch_gen=args.patch_gen),
-#         batch_size=args.batch_size, shuffle=False, **kwargs)
-#
-#     return train_loader
 
 def create_loaders():
     kwargs = {'num_workers': 1, 'pin_memory': True}
@@ -303,9 +290,6 @@ def main(train_loader, test_loaders, model):
     start = args.start_epoch
     end = start + args.epochs
     for epoch in range(start, end):
-        # WBSLoader = None
-        # if args.tower_dataset != '':
-        #     WBSLoader = create_loader_WBSDataset( load_random_triplets=triplet_flag )
         train(train_loader, model, optimizer1, epoch, False, WBSLoader=None)
 
         for test_loader in test_loaders:
@@ -318,13 +302,13 @@ if __name__ == '__main__':
     datasets_path = path.join(args.dataroot, 'Train')
     datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
     DSs = []
-    DSs += [One_DS(Args_Brown(datasets_path[0], 5, True, easy_transform), group_id=[0,1])]
-    DSs += [One_DS(Args_Brown(datasets_path[0], 5, True, easy_transform), group_id=[0])]
-    # DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.batch_size, True, transform_AMOS,
-    #                          args.patch_gen, args.cams_in_batch), group_id=[1])]
-    # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0,1])]
-    # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0])]
-    # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.AMOS, group_id=[1])]
+    for i in range(len(datasets_path)):
+        DSs += [One_DS(Args_Brown(datasets_path[i], 5, True, normal_transform), group_id=[i])]
+        DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.batch_size, True, transform_AMOS,
+                                 args.patch_gen, args.cams_in_batch), group_id=[i])]
+        # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0,1])]
+        # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0])]
+        # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.AMOS, group_id=[1])]
 
     wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
     print('----------------\nsplit_name: {}'.format(split_name))
