@@ -493,6 +493,29 @@ class Interface():
             for i,f in enumerate(fs[1:]):
                 cv2.imwrite(f.replace(dir_in, dir_out), warps[i])
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    END = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+    BLACK = '\033[1;30m'
+    RED = '\033[1;31m'
+    GREEN = '\033[1;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[1;34m'
+    PURPLE = '\033[1;35m'
+    CYAN = '\033[1;36m'
+    WHITE = '\033[1;37m'
+
+    @staticmethod
+    def p(color, text):
+        print(color + text + bcolors.END)
+
 class TotalDatasetsLoader(data.Dataset):
     def __init__(self, dataset_path, train=True, batch_size=None, n_tuples=5000000, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
         super(TotalDatasetsLoader, self).__init__()
@@ -533,38 +556,7 @@ class TotalDatasetsLoader(data.Dataset):
 
         self.indices = create_indices()
 
-        # def get_next_interval(): # intervals indicate from which DS the patches come (interval is a pair of idxs)
-        #     return np.random.choice(range(1,len(intervals)))
-
-        # n_batches = int(n_triplets / batch_size)
-        # triplets = []
-        # for _ in tqdm(range(n_batches), desc='Generating {} triplets'.format(n_triplets)):
-        #     if False: # no other than HP
-        #         cs = np.random.choice(range_intervals[get_next_interval()], size=batch_size)
-        #         for c1 in cs:
-        #             if len(indices[c1]) == 2:
-        #                 n1, n2 = 0, 1
-        #             else:
-        #                 n1, n2 = np.random.choice(range(len(indices[c1])), size=2, replace=False)
-        #             triplets += [[indices[c1][n1], indices[c1][n2], -1]] # negative (pos 2) is not used
-        #
-        #     ### add HPs
-        #     cs = np.random.choice(range_intervals[0], size=batch_size)
-        #     for c1 in cs:
-        #         if len(indices[c1]) == 2:
-        #             n1, n2 = 0, 1
-        #         else:
-        #             n1, n2 = np.random.choice(range(len(indices[c1])), size=2, replace=False)
-        #         triplets += [[indices[c1][n1], indices[c1][n2], -1]]  # negative is not used
-        #
-        # return torch.LongTensor(np.array(triplets))
-
-    # def __iter__(self):
-    #     pass
-    #     return self
-
     def __getitem__(self, idx):
-    # def __getitem__(self, idx):
         def transform_img(img, transformation=None):
             return transformation(img) if transformation is not None else img
 
@@ -575,13 +567,10 @@ class TotalDatasetsLoader(data.Dataset):
                     n1, n2 = 0, 1
                 else:
                     n1, n2 = np.random.choice(range(len(self.indices[c1])), size=2, replace=False)
-                # t = [self.indices[c1][n1], self.indices[c1][n2], -1]
                 self.triplets += [[self.indices[c1][n1], self.indices[c1][n2], -1]]
 
-        # print(len(self.triplets))
         t = self.triplets[0]
         self.triplets = self.triplets[1:]
-        # t = self.triplets[idx] # idx is index of sample
         a, p = self.data[t[0]], self.data[t[1]] # t[2] would be negative, not used
 
         img_a = transform_img(a, self.transform_dict[self.all_txts[t[0]]] if self.all_txts[t[0]] in self.transform_dict.keys() else self.transform_dict['default'])
@@ -594,13 +583,11 @@ class TotalDatasetsLoader(data.Dataset):
             if random.random() > 0.5: # do flip
                 img_a = torch.from_numpy(deepcopy(img_a.numpy()[:,:,::-1]))
                 img_p = torch.from_numpy(deepcopy(img_p.numpy()[:,:,::-1]))
-        # print(idx)
+
         return img_a, img_p
 
     def __len__(self):
         return 9999999999
-    #     if self.train:
-    #         return self.n_tuples
 
 class FORMAT(Enum):
     AMOS = 0
@@ -636,6 +623,7 @@ class One_DS():
         else:
             raise('incorrect args class')
         self.group_id = group_id
+        bcolors.p(bcolors.YELLOW, str(self.__dict__))
 
 class DS_wrapper():
     def prepare_epoch(self):
@@ -686,7 +674,6 @@ class DS_wrapper():
 
     def __len__(self):
         return int(self.n_tuples / self.batch_size)
-        # return int(self.n_tuples)
 
 if __name__ == '__main__':
     Fire(Interface)
