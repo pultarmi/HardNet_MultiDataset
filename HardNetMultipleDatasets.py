@@ -304,8 +304,8 @@ if __name__ == '__main__':
     DSs = []
     for i in range(len(datasets_path)):
         DSs += [One_DS(Args_Brown(datasets_path[i], 5, True, normal_transform), group_id=[i])]
-        DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.batch_size, True, transform_AMOS,
-                                 args.patch_gen, args.cams_in_batch), group_id=[i])]
+    DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.batch_size, True, transform_AMOS,
+                             args.patch_gen, args.cams_in_batch), group_id=list(range(len(datasets_path))))]
         # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0,1])]
         # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0])]
         # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.AMOS, group_id=[1])]
