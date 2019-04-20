@@ -96,7 +96,7 @@ class WBSDataset(data.Dataset):
         self.download = download
         self.border = border
         self.batch_size = batch_size
-        self.n_pairs = n_tuples
+        self.n_tuples = n_tuples
         self.fliprot = fliprot
         self.group_id = group_id
 
