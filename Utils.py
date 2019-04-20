@@ -13,6 +13,9 @@ from tqdm import tqdm
 from glob import glob
 from fire import Fire
 from PIL import Image
+from enum import Enum
+import torch.utils.data as data
+from WBSDataset import WBSDataset
 # from HandCraftedModules import HessianResp
 
 # resize image to size 32x32
@@ -109,7 +112,7 @@ def CircularGaussKernel(kernlen=None, circ_zeros = False, sigma = None, norm = T
         sigma2 = 0.9 * r2
         # sigma = np.sqrt(sigma2)
     else:
-        sigma2 = 2.0 * sigma * sigma    
+        sigma2 = 2.0 * sigma * sigma
     x = np.linspace(-halfSize,halfSize,kernlen)
     xv, yv = np.meshgrid(x, x, sparse=False, indexing='xy')
     distsq = (xv)**2 + (yv)**2
@@ -367,7 +370,7 @@ class TripletPhotoTour(dset.PhotoTour):
     def __getitem__(self, index):
         def transform_img(img):
             if self.transform is not None:
-                img = self.transform(img.numpy())
+                img = self.transform(img)
             return img
 
         if not self.train:
@@ -444,19 +447,12 @@ def test(test_loader, model, epoch, logger_test_name, args):
     distances = np.vstack(distances).reshape(num_tests)
 
     fpr95 = ErrorRateAt95Recall(labels, 1.0 / (distances + 1e-8))
-    #fdr95 = ErrorRateFDRAt95Recall(labels, 1.0 / (distances + 1e-8))
-
-    #fpr2 = convertFDR2FPR(fdr95, 0.95, 50000, 50000)
-    #fpr2fdr = convertFPR2FDR(fpr2, 0.95, 50000, 50000)
 
     mean_loss = np.mean(np.array(mean_losses))
 
     print('mean loss:{}'.format(mean_loss))
-    #print('\33[91mTest set: Accuracy(FDR95): {:.8f}\n\33[0m'.format(fdr95))
     print('\33[91mTest set: Accuracy(FPR95): {:.8f}\33[0m'.format(fpr95))
     print('\33[91mTest set: Accuracy(AP): {:.8f}\33[0m'.format(AP(labels, distances)))
-    #print('\33[91mTest set: Accuracy(FDR2FPR): {:.8f}\n\33[0m'.format(fpr2))
-    #print('\33[91mTest set: Accuracy(FPR2FDR): {:.8f}\n\33[0m'.format(fpr2fdr))
 
     if args.test:
         curve = prec_recall_curve(labels, distances)
@@ -471,21 +467,13 @@ def test(test_loader, model, epoch, logger_test_name, args):
         print('auc = {}'.format(auc))
         print('')
 
-    #fpr2 = convertFDR2FPR(round(fdr95,2), 0.95, 50000, 50000)
-    #fpr2fdr = convertFPR2FDR(round(fpr2,2), 0.95, 50000, 50000)
-
-    #print('\33[91mTest set: Accuracy(FDR2FPR): {:.8f}\n\33[0m'.format(fpr2))
-    #print('\33[91mTest set: Accuracy(FPR2FDR): {:.8f}\n\33[0m'.format(fpr2fdr))
-
-    if (args.enable_logging):
-        logger.log_value(logger_test_name + ' fpr95', fpr95)
+    # if (args.enable_logging):
+    #     logger.log_value(logger_test_name + ' fpr95', fpr95)
 
 class Interface():
     def symlinks(self, src, dst):
         os.makedirs(dst, exist_ok=True)
         for f in glob(os.path.join(src, '*')):
-            # print(f.replace(src, dst))
-            # exit(0)
             os.symlink(os.path.abspath(f), f.replace(src, dst))
 
     def hom_in_HP(self, dir_in, dir_out):
@@ -504,6 +492,201 @@ class Interface():
             cv2.imwrite(fs[0].replace(dir_in, dir_out), imgs[0]) # firt has diff size
             for i,f in enumerate(fs[1:]):
                 cv2.imwrite(f.replace(dir_in, dir_out), warps[i])
+
+class TotalDatasetsLoader(data.Dataset):
+    def __init__(self, dataset_path, train=True, batch_size=None, n_triplets=5000000, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
+        super(TotalDatasetsLoader, self).__init__()
+        dataset = torch.load(dataset_path)
+        data, labels = dataset[0], dataset[1]
+        try:
+            self.all_txts = dataset[-1] # 'e1, e2, ...'
+            if type(self.all_txts)!=type(['some_text']):
+                raise Exception()
+        except:
+            self.all_txts = [''] * len(labels)
+
+        self.split_idxs = [-1] + [torch.max(labels).item()]
+
+        intervals = [(self.split_idxs[i], self.split_idxs[i+1]) for i in range(len(self.split_idxs)-1)]
+        self.range_intervals = [list(range(c[0]+1, c[1]+1)) for c in intervals]
+
+        self.data, self.labels = data, labels
+        self.transform_dict = transform_dict
+        self.train = train
+        self.n_triplets = n_triplets
+        self.batch_size = batch_size
+        self.fliprot = fliprot
+        self.triplets = []
+        self.group_id = group_id
+        if self.train:
+            self.generate_triplets(self.labels, self.n_triplets, self.batch_size, intervals=intervals)
+
+    def generate_triplets(self, labels, n_triplets, batch_size, intervals=None):
+        def create_indices():
+            inds = dict()
+            for idx, ind in enumerate(labels):
+                ind = ind.item()
+                if ind not in inds:
+                    inds[ind] = []
+                inds[ind].append(idx)
+            return inds
+
+        self.indices = create_indices()
+
+        # def get_next_interval(): # intervals indicate from which DS the patches come (interval is a pair of idxs)
+        #     return np.random.choice(range(1,len(intervals)))
+
+        # n_batches = int(n_triplets / batch_size)
+        # triplets = []
+        # for _ in tqdm(range(n_batches), desc='Generating {} triplets'.format(n_triplets)):
+        #     if False: # no other than HP
+        #         cs = np.random.choice(range_intervals[get_next_interval()], size=batch_size)
+        #         for c1 in cs:
+        #             if len(indices[c1]) == 2:
+        #                 n1, n2 = 0, 1
+        #             else:
+        #                 n1, n2 = np.random.choice(range(len(indices[c1])), size=2, replace=False)
+        #             triplets += [[indices[c1][n1], indices[c1][n2], -1]] # negative (pos 2) is not used
+        #
+        #     ### add HPs
+        #     cs = np.random.choice(range_intervals[0], size=batch_size)
+        #     for c1 in cs:
+        #         if len(indices[c1]) == 2:
+        #             n1, n2 = 0, 1
+        #         else:
+        #             n1, n2 = np.random.choice(range(len(indices[c1])), size=2, replace=False)
+        #         triplets += [[indices[c1][n1], indices[c1][n2], -1]]  # negative is not used
+        #
+        # return torch.LongTensor(np.array(triplets))
+
+    def __getitem__(self, idx):
+        def transform_img(img, transformation=None):
+            return transformation(img) if transformation is not None else img
+
+        if len(self.triplets)==0:
+            cs = np.random.choice(self.range_intervals[0], size=self.batch_size)
+            for c1 in cs:
+                if len(self.indices[c1]) == 2:
+                    n1, n2 = 0, 1
+                else:
+                    n1, n2 = np.random.choice(range(len(self.indices[c1])), size=2, replace=False)
+                # t = [self.indices[c1][n1], self.indices[c1][n2], -1]
+                self.triplets += [[self.indices[c1][n1], self.indices[c1][n2], -1]]
+
+        # print(len(self.triplets))
+        t = self.triplets[0]
+        self.triplets = self.triplets[1:]
+        # t = self.triplets[idx] # idx is index of sample
+        a, p = self.data[t[0]], self.data[t[1]] # t[2] would be negative, not used
+
+        img_a = transform_img(a, self.transform_dict[self.all_txts[t[0]]] if self.all_txts[t[0]] in self.transform_dict.keys() else self.transform_dict['default'])
+        img_p = transform_img(p, self.transform_dict[self.all_txts[t[1]]] if self.all_txts[t[1]] in self.transform_dict.keys() else self.transform_dict['default'])
+
+        if self.fliprot: # transform images if required
+            if random.random() > 0.5: # do rotation
+                img_a = img_a.permute(0,2,1)
+                img_p = img_p.permute(0,2,1)
+            if random.random() > 0.5: # do flip
+                img_a = torch.from_numpy(deepcopy(img_a.numpy()[:,:,::-1]))
+                img_p = torch.from_numpy(deepcopy(img_p.numpy()[:,:,::-1]))
+        # print(idx)
+        return img_a, img_p
+
+    def __len__(self):
+        if self.train:
+            return self.n_triplets
+
+class FORMAT(Enum):
+    AMOS = 0
+    Brown = 1
+
+class Args_Brown():
+    def __init__(self, path:str, relative_batch_size:int, fliprot:bool, transform_dict:dict):
+        self.path = path
+        self.batch_size = relative_batch_size
+        self.fliprot = fliprot
+        self.transform_dict = transform_dict
+
+class Args_AMOS():
+    def __init__(self, tower_dataset, split_name, n_patch_sets, weight_function, n_pairs, batch_size, fliprot, transform, patch_gen, cams_in_batch):
+        self.tower_dataset = tower_dataset
+        self.split_name = split_name
+        self.n_patch_sets = n_patch_sets
+        self.weight_function = weight_function
+        self.n_pairs = n_pairs
+        self.batch_size = batch_size
+        self.fliprot = fliprot
+        self.transform = transform
+        self.patch_gen = patch_gen
+        self.cams_in_batch = cams_in_batch
+
+class One_DS():
+    def __init__(self, args, group_id:[int]=[0]):
+        if isinstance(args, Args_Brown):
+            self.__dict__ = args.__dict__.copy()
+            self.format = FORMAT.Brown
+        elif isinstance(args, Args_AMOS):
+            self.__dict__ = args.__dict__.copy()
+            self.format = FORMAT.AMOS
+        else:
+            raise('incorrect args class')
+        self.group_id = group_id
+
+class DS_wrapper():
+    def __init__(self, datasets:[One_DS], n_pairs, batch_size, fliprot=False):
+        self.n_pairs = n_pairs
+        self.group_ids = list(set().union(*[c.group_id for c in datasets]))
+        self.gid_to_DS = {}
+
+        kwargs = {'num_workers': 1, 'pin_memory': True}
+        loaders = []
+        for c in datasets:
+            if c.format == FORMAT.Brown:
+                loaders += [TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=batch_size, dataset_path=os.path.abspath(c.path), fliprot=fliprot,
+                                                n_triplets=self.n_pairs, transform_dict=c.transform_dict, group_id=c.group_id)]
+            elif c.format == FORMAT.AMOS:
+                loaders += [WBSDataset(root=c.tower_dataset, split_name=c.split_name, n_patch_sets=c.n_patch_sets,
+                    weight_function=c.weight_function, grayscale=True, download=False, group_id=c.group_id,
+                    n_pairs=c.n_pairs, batch_size=c.batch_size, fliprot=c.fliprot, transform=c.transform, cams_in_batch=c.cams_in_batch, patch_gen=c.patch_gen)]
+            else:
+                raise('invalid DS format')
+
+        # for gid in self.group_ids:
+        #     self.gid_to_DS[gid] = [c for c in datasets if gid in c.group_id]
+        #     sum_of_sizes = sum([c.batch_size for c in self.gid_to_DS[gid]])
+        #     for DS in self.gid_to_DS[gid]:
+        #         DS.batch_size = int((DS.batch_size / sum_of_sizes) * batch_size)
+
+        self.gid_to_loaders = {}
+        for gid in self.group_ids:
+            rel_loaders = [c for c in loaders if gid in c.group_id]
+            sum_of_sizes = sum([c.batch_size for c in rel_loaders])
+            for loader in rel_loaders:
+                loader.pom_batch_size = int((loader.batch_size / sum_of_sizes) * batch_size)
+            self.gid_to_loaders[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.pom_batch_size, shuffle=False, **kwargs)) for c in rel_loaders]
+
+        # self.gid_to_loaders = {}
+        # for gid in self.group_ids:
+        #     self.gid_to_loaders[gid] = []
+        #     for DS in self.gid_to_DS[gid]:
+        #         self.gid_to_loaders[gid] += [torch.utils.data.DataLoader(
+        #                 TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=batch_size, dataset_path=os.path.abspath(DS.path), fliprot=fliprot,
+        #                                     n_triplets=self.n_pairs, transform_dict=DS.transform_dict),
+        #             batch_size=DS.batch_size, shuffle=False, **kwargs)]
+        #         self.gid_to_loaders[gid] = [iter(c) for c in self.gid_to_loaders[gid]]
+
+    def __getitem__(self, _):
+        gid = random.choice(self.group_ids)
+        data_a, data_p = next(self.gid_to_loaders[gid][0])
+        for loader in self.gid_to_loaders[gid][1:]:
+            pom_a, pom_p = next(loader)
+            data_a = torch.cat((data_a.float(), pom_a.float()))
+            data_p = torch.cat((data_p.float(), pom_p.float()))
+        return data_a, data_p
+
+    def __len__(self):
+        # return int(self.n_pairs / self.b_size)
+        return int(self.n_pairs)
 
 if __name__ == '__main__':
     Fire(Interface)

@@ -10,8 +10,8 @@ import pathos.pools as pp
 import torchvision.transforms as tforms
 from copy import deepcopy
 from tqdm import tqdm
-from HandCraftedModules import NMS2d
 from random import randint
+import torch.nn as nn
 
 def get_img_set_num(dir_name):
     img_set = os.listdir(dir_name)
@@ -27,12 +27,29 @@ def LAF2A(laf, h, w, PS = 32):
     A[1,2] = A[1,2] - s/2.
     return A
 
-# HesGen = 'AH' # castor
-# HesGen = '' # boruvka
-# HesGen = '_UH' # updated hessians
-
 def rotate(l, n):
     return l[n:] + l[:n]
+
+class NMS2d(nn.Module):
+    def __init__(self, kernel_size = 17, threshold = 0): # kernel_size = 3
+        super(NMS2d, self).__init__()
+        self.MP = nn.MaxPool2d(kernel_size, stride=1, return_indices=False, padding = kernel_size/2)
+        self.eps = 1e-10
+        self.th = threshold
+        return
+
+    def forward(self, x):
+        #local_maxima = self.MP(x)
+        # if x!=self.MP(x):
+        #     return x
+        # else:
+        #     return torch.Tensor(0)
+
+        if self.th > self.eps:
+            return  x * (x > self.th).float() * ((x + self.eps - self.MP(x)) > 0).float()
+        else:
+            # return ((x - self.MP(x) + self.eps) > 0).float() * x
+            return (x == self.MP(x)).float() * x
 
 ### example of correct weight function
 #from HandCraftedModules import HessianResp
@@ -47,7 +64,6 @@ class WBSDataset(data.Dataset):
         root (string): Root directory where directories with image sets are.
         path_to_train_test_split(string or None): path to json text file with train-test split. If None, random is generated
         split_name (string): Name of the train-test split to load.
-        with_mask(bool, optional): If there is a mask, where not detect keypoints
         dataset_name(string):
         n_patch_sets(int): Number of correspondences to generate
         n_positives(int, default: 2): Number of positive examples to generate, if more than 2 images exist
@@ -56,38 +72,33 @@ class WBSDataset(data.Dataset):
         grayscale(bool, default True): Output grayscale patches
         weight_function(callable, optional): function for weigthing random sampling. E.g. some saliency
         Takes PIL image, outputs numpy array of the same w,h
-        weight_merge(string): can be Random, Max, Average
         transform (callable, optional): A function/transform that  takes in an PIL image and returns a transformed version.
         download (bool, optional): If true, down: loads the dataset from the internet and puts it in root directory. If dataset is already downloaded, it is not
             downloaded again.
     """
-    def __init__(self, root, path_to_train_test_split = None, split_name = 'full', train = True, transform = None, with_mask = False, n_patch_sets = 1000, n_positives = 2,
-                 patch_size = 96, weight_function = None, grayscale = True, weight_merge = 'Average', max_tilt = 1.0,
-                 border = 10, download = False, overwrite = False, n_pairs = 2000, batch_size = 1024, fliprot = False,
-                 patch_gen='oneImg', masks_dir=None, mark_patches_dir=None, new_angles=0, cams_in_batch=22, spx=0, spy=0, save_losses=False, NMS=False):
+    def __init__(self, root, path_to_train_test_split = None, split_name = 'full', transform = None, n_patch_sets = 1000, n_positives = 2,
+                 patch_size = 96, weight_function = None, grayscale = True, max_tilt = 1.0, group_id=[0],
+                 border = 5, download = False, overwrite = False, n_pairs = 2000, batch_size = 1024, fliprot = False,
+                 patch_gen='oneImg', masks_dir=None, mark_patches_dir=None, new_angles=0, cams_in_batch=0, spx=0, spy=0, save_losses=False, NMS=False):
         self.tpl =  tforms.ToPILImage()
         self.ttsr =  tforms.ToTensor()
         self.img_ext = set(['jpg', 'jpeg', 'png', 'ppm', 'bmp'])
         self.root = os.path.expanduser(root)
         self.path_to_train_test_split = path_to_train_test_split
         self.split_name = split_name
-        self.train = train
         self.transform = transform
-        self.with_mask = with_mask
         self.n_patch_sets = n_patch_sets
         self.n_positives = n_positives
         self.patch_size = patch_size
         self.weight_function = weight_function
         self.grayscale = grayscale
-        self.weight_merge = weight_merge
         self.max_tilt = max_tilt
         self.download = download
         self.border = border
         self.batch_size = batch_size
         self.n_pairs = n_pairs
         self.fliprot = fliprot
-        # self.data_dir = os.path.join(self.root, self.dataset_name)
-        # self.data_down = os.path.join(self.root, '{}.tar.gz'.format(self.dataset_name))
+        self.group_id = group_id
 
         self.NMS = NMS
 
@@ -105,13 +116,11 @@ class WBSDataset(data.Dataset):
 
         self.cam_idx = 0
 
-        if self.train:
-            self.data_file = os.path.join(self.root, '_'.join([str(c) for c in [path.basename(root).lower(), self.split_name, 'train.pt']]))
-        else:
-            self.data_file = os.path.join(self.root, path.basename(root).lower() + '_' + self.split_name + '_test.pt')
-        #try:
-        import json
-        from pprint import pprint
+        # if self.train:
+        self.data_file = os.path.join(self.root, '_'.join([str(c) for c in [path.basename(root).lower(), self.split_name, 'train.pt']]))
+        # else:
+        #     self.data_file = os.path.join(self.root, path.basename(root).lower() + '_' + self.split_name + '_test.pt')
+
         if self.path_to_train_test_split is None:
             self.img_fnames = None
         else:
@@ -125,62 +134,61 @@ class WBSDataset(data.Dataset):
                     self.img_fnames = set(data[self.split_name]['test'])
             else:
                 self.img_fnames = set(data[self.split_name]['test'])
-        # with torch.no_grad():
         self.process_dataset(overwrite = overwrite)
         #if download:
         #    self.download()
         if not self._check_datafile_exists():
             raise RuntimeError('Dataset not found.' + ' You can use download=True to download it')
+        self.pairs = []
         if self.patch_gen == 'watchGood':
             self.indices = self.generate_pairs_new(n_pairs, batch_size)
-        # elif self.patch_gen in ['oneImg', 'sumImg', 'median']:
         else:
-            self.indices = self.generate_pairs(n_pairs, batch_size)
-        return
+            self.indices = self.generate_tuples(n_pairs, batch_size)
 
     def __getitem__(self, index):
     # Args: index (int): Index
     # Returns: list: [data1, data2, ..., dataN]
-    #     print(index)
-    
-        if self.train:
-            c1n1n2 = self.indices[index]
-            data = self.patch_sets[c1n1n2[0]]
-            img_a = data[c1n1n2[1]]
-            img_p = data[c1n1n2[2]]
-            if self.transform is not None:
-                img_a = self.transform(img_a)
-                img_p = self.transform(img_p)
-            # transform images if required
-            if self.fliprot:
-                do_flip = random.random() > 0.5
-                do_rot = random.random() > 0.5
-                if do_rot:
-                    img_a = img_a.permute(0,2,1)
-                    img_p = img_p.permute(0,2,1)
-                if do_flip:
-                    # img_a = torch.from_numpy(deepcopy(img_a.detach().numpy()[:,:,::-1]))
-                    # img_p = torch.from_numpy(deepcopy(img_p.detach().numpy()[:,:,::-1]))
-                    img_a = torch.from_numpy(deepcopy(img_a.numpy()[:,:,::-1]))
-                    img_p = torch.from_numpy(deepcopy(img_p.numpy()[:,:,::-1]))
+    #     all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
+    #     cam_idxs = [np.array([i for i,x in enumerate(self.cam_idxs) if x==c]) for c in all_cams]
+    #     n_batches = int(self.n_pairs / self.batch_size)
+    #     cur_allowed_cams = all_cams
+    #     for _ in tqdm(range(n_batches)):
 
-            if self.save_losses:
-                return img_a, img_p, c1n1n2[0]
-            else:
-                return img_a, img_p
+        if len(self.pairs) == 0:
+            self.cur_allowed_cams = self.get_source_cams(self.all_cams, self.cur_allowed_cams, self.cams_in_batch)
+            self.allowed_idxs = list(itertools.chain.from_iterable([self.cam_idxs[c] for c in [self.all_cams.index(x) for x in self.cur_allowed_cams]]))
+            cs = np.random.choice(self.allowed_idxs, size=self.batch_size)
+            for c1 in cs:
+                ns = np.random.choice( list(range(len(self.patch_sets[c1]))), self.n_positives )
+                self.pairs += [[c1, *ns]]
+            # return torch.LongTensor(np.array(pairs))
 
-        else:
-            data = self.patch_sets[index]
-            patches = [x for x in patches]
-            if self.transform is not None:
-                return [self.transform(x) for x in patches]
-            return [x for x in patches]
+        # c1n1n2 = self.indices[
+
+        c1n1n2 = self.pairs[0]
+        self.pairs = self.pairs[1:]
+        data = self.patch_sets[c1n1n2[0]]
+        imgs = [data[c] for c in c1n1n2[1:]]
+        if self.transform is not None:
+            imgs = [self.transform(c) for c in imgs]
+        if self.fliprot: # transform images if required
+            do_flip = random.random() > 0.5
+            do_rot = random.random() > 0.5
+            if do_rot:
+                imgs = [c.permute(0,2,1) for c in imgs]
+            if do_flip:
+                # img_a = torch.from_numpy(deepcopy(img_a.detach().numpy()[:,:,::-1]))
+                # img_p = torch.from_numpy(deepcopy(img_p.detach().numpy()[:,:,::-1]))
+
+                imgs = [torch.from_numpy(deepcopy(c.numpy()[:,:,::-1])) for c in imgs]
+
+        return img_a, img_p, c1n1n2[0] if self.save_losses else imgs
 
     def __len__(self):
-        if self.train:
-            return len(self.indices)
-        else:
-            return self.patch_sets.size(0)
+        # if self.train:
+        return len(self.indices)
+        # else:
+        #     return self.patch_sets.size(0)
 
     def _check_downloaded(self):
         # return os.path.exists(self.data_dir)
@@ -200,30 +208,32 @@ class WBSDataset(data.Dataset):
         out += list(random.sample(again_classes, from_again))
         return out
 
-    def generate_pairs(self, n_pairs, batch_size):
+    def generate_tuples(self, n_pairs, batch_size):
         pairs = []
-        all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
+        self.all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
 
-        cam_idxs = [np.array([i for i,x in enumerate(self.cam_idxs) if x==c]) for c in all_cams]
+        self.cam_idxs = [np.array([i for i,x in enumerate(self.cam_idxs) if x==c]) for c in self.all_cams]
         n_batches = int(n_pairs / batch_size)
-        cur_allowed_cams = all_cams
-        for _ in tqdm(range(n_batches)):
-            cur_allowed_cams = self.get_source_cams(all_cams, cur_allowed_cams, self.cams_in_batch)
-            allowed_idxs = list(itertools.chain.from_iterable([cam_idxs[c] for c in [all_cams.index(x) for x in cur_allowed_cams]]))
-
-            cs = np.random.choice(allowed_idxs, size=batch_size)
-
-            for c1 in cs:
-                num_pos = len(self.patch_sets[c1])
-                if num_pos == 2:  # hack to speed up process
-                    n1, n2 = 0, 1
-                else:
-                    n1 = np.random.randint(0, num_pos)
-                    n2 = np.random.randint(0, num_pos)
-                    while n1 == n2:
-                        n2 = np.random.randint(0, num_pos)
-                pairs += [[c1, n1, n2]]
-        return torch.LongTensor(np.array(pairs))
+        self.cur_allowed_cams = self.all_cams
+        # for _ in tqdm(range(n_batches)):
+        #     cur_allowed_cams = self.get_source_cams(all_cams, cur_allowed_cams, self.cams_in_batch)
+        #     allowed_idxs = list(itertools.chain.from_iterable([cam_idxs[c] for c in [all_cams.index(x) for x in cur_allowed_cams]]))
+        #
+        #     cs = np.random.choice(allowed_idxs, size=batch_size)
+        #
+        #     for c1 in cs:
+        #         # num_pos = len(self.patch_sets[c1])
+        #         ns = np.random.choice( list(range(len(self.patch_sets[c1]))), self.n_positives )
+        #         # if num_pos == 2:  # hack to speed up process
+        #         #     n1, n2 = 0, 1
+        #         # else:
+        #         #     n1 = np.random.randint(0, num_pos)
+        #         #     n2 = np.random.randint(0, num_pos)
+        #         #     while n1 == n2:
+        #         #         n2 = np.random.randint(0, num_pos)
+        #         # pairs += [[c1, n1, n2]]
+        #         pairs += [[c1, *ns]]
+        # return torch.LongTensor(np.array(pairs))
 
     def generate_pairs_new(self, n_pairs, batch_size):
         pairs = []
@@ -1022,7 +1032,7 @@ class WBSDataset(data.Dataset):
 
         print('Dataset path: {}'.format(self.data_file))
         print('Dataset saved, due to safety, please run again the same command to start training')
-        send_email()
+        send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful fo training, change the recipient address for yours or comment this out
         exit(0)
 
 #ds = WBSDataset(root='/home/old-ufo/Dropbox/snavely', n_patch_sets = 10000, grayscale = True, max_tilt = 4.0,
