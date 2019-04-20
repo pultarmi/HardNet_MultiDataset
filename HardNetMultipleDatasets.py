@@ -178,21 +178,13 @@ def create_loaders():
 
 def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
     model.train()
-
-    # train_loader.prepare_epoch()
     pbar = tqdm(enumerate(train_loader))
-    # if WBSLoader is not None:
-    #     WBSiter = iter(WBSLoader)
+
     for batch_idx, data in pbar:
         if load_triplets:
             data_a, data_p, data_n = data
         else:
             data_a, data_p = data
-
-            # if WBSLoader is not None and batch_idx < len(WBSLoader):
-            #     pom_a, pom_p = next(WBSiter)
-            #     data_a = torch.cat((data_a.float(), pom_a.float()))
-            #     data_p = torch.cat((data_p.float(), pom_p.float()))
 
         def fce(data_a, data_p, change_lr=True):
             data_a, data_p = Variable(data_a.cuda()), Variable(data_p.cuda())
@@ -303,8 +295,8 @@ if __name__ == '__main__':
     datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
     DSs = []
     for i in range(len(datasets_path)):
-        DSs += [One_DS(Args_Brown(datasets_path[i], 5, True, normal_transform), group_id=[i])]
-    DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.batch_size, True, transform_AMOS,
+        DSs += [One_DS(Args_Brown(datasets_path[i], 1, True, normal_transform), group_id=[i])]
+    DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
                              args.patch_gen, args.cams_in_batch), group_id=list(range(len(datasets_path))))]
         # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0,1])]
         # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0])]
