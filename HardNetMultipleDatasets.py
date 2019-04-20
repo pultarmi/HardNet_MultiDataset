@@ -192,6 +192,7 @@ def create_loaders():
 def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
     model.train()
 
+    # train_loader.prepare_epoch()
     pbar = tqdm(enumerate(train_loader))
     # if WBSLoader is not None:
     #     WBSiter = iter(WBSLoader)
@@ -235,7 +236,7 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
                 adjust_learning_rate( optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs )
             if batch_idx % args.log_interval == 0:
                 pbar.set_description( 'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        epoch, batch_idx * len(data_a), len(train_loader), 100. * batch_idx / len(train_loader), loss.item()) )
+                        epoch, batch_idx * len(data_a), len(train_loader)*len(data_a), 100. * batch_idx / len(train_loader), loss.item()) )
 
         fce(data_a, data_p)
 
@@ -317,15 +318,15 @@ if __name__ == '__main__':
     datasets_path = path.join(args.dataroot, 'Train')
     datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
     DSs = []
-    # DSs += [One_DS(Args_Brown(datasets_path[0], 5, True, easy_transform), group_id=[0,1])]
-    # DSs += [One_DS(Args_Brown(datasets_path[0], 5, True, easy_transform), group_id=[0])]
-    DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.n_triplets, args.batch_size, True, transform_AMOS,
-                             args.patch_gen, args.cams_in_batch), group_id=[1])]
+    DSs += [One_DS(Args_Brown(datasets_path[0], 5, True, easy_transform), group_id=[0,1])]
+    DSs += [One_DS(Args_Brown(datasets_path[0], 5, True, easy_transform), group_id=[0])]
+    # DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), args.batch_size, True, transform_AMOS,
+    #                          args.patch_gen, args.cams_in_batch), group_id=[1])]
     # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0,1])]
     # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0])]
     # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.AMOS, group_id=[1])]
 
-    wrapper = DS_wrapper(DSs, args.n_patch_sets, args.batch_size)
+    wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
     main(wrapper, test_loaders, model)

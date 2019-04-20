@@ -494,7 +494,7 @@ class Interface():
                 cv2.imwrite(f.replace(dir_in, dir_out), warps[i])
 
 class TotalDatasetsLoader(data.Dataset):
-    def __init__(self, dataset_path, train=True, batch_size=None, n_triplets=5000000, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
+    def __init__(self, dataset_path, train=True, batch_size=None, n_tuples=5000000, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
         super(TotalDatasetsLoader, self).__init__()
         dataset = torch.load(dataset_path)
         data, labels = dataset[0], dataset[1]
@@ -513,13 +513,13 @@ class TotalDatasetsLoader(data.Dataset):
         self.data, self.labels = data, labels
         self.transform_dict = transform_dict
         self.train = train
-        self.n_triplets = n_triplets
+        self.n_tuples = n_tuples
         self.batch_size = batch_size
         self.fliprot = fliprot
         self.triplets = []
         self.group_id = group_id
         if self.train:
-            self.generate_triplets(self.labels, self.n_triplets, self.batch_size, intervals=intervals)
+            self.generate_triplets(self.labels, self.n_tuples, self.batch_size, intervals=intervals)
 
     def generate_triplets(self, labels, n_triplets, batch_size, intervals=None):
         def create_indices():
@@ -559,7 +559,12 @@ class TotalDatasetsLoader(data.Dataset):
         #
         # return torch.LongTensor(np.array(triplets))
 
+    # def __iter__(self):
+    #     pass
+    #     return self
+
     def __getitem__(self, idx):
+    # def __getitem__(self, idx):
         def transform_img(img, transformation=None):
             return transformation(img) if transformation is not None else img
 
@@ -593,8 +598,9 @@ class TotalDatasetsLoader(data.Dataset):
         return img_a, img_p
 
     def __len__(self):
-        if self.train:
-            return self.n_triplets
+        return 9999999999
+    #     if self.train:
+    #         return self.n_tuples
 
 class FORMAT(Enum):
     AMOS = 0
@@ -608,12 +614,11 @@ class Args_Brown():
         self.transform_dict = transform_dict
 
 class Args_AMOS():
-    def __init__(self, tower_dataset, split_name, n_patch_sets, weight_function, n_pairs, batch_size, fliprot, transform, patch_gen, cams_in_batch):
+    def __init__(self, tower_dataset, split_name, n_patch_sets, weight_function, batch_size, fliprot, transform, patch_gen, cams_in_batch):
         self.tower_dataset = tower_dataset
         self.split_name = split_name
         self.n_patch_sets = n_patch_sets
         self.weight_function = weight_function
-        self.n_pairs = n_pairs
         self.batch_size = batch_size
         self.fliprot = fliprot
         self.transform = transform
@@ -633,51 +638,46 @@ class One_DS():
         self.group_id = group_id
 
 class DS_wrapper():
-    def __init__(self, datasets:[One_DS], n_pairs, batch_size, fliprot=False):
-        self.n_pairs = n_pairs
-        self.group_ids = list(set().union(*[c.group_id for c in datasets]))
-        self.gid_to_DS = {}
-
+    def prepare_epoch(self):
         kwargs = {'num_workers': 1, 'pin_memory': True}
         loaders = []
-        for c in datasets:
+        for c in self.datasets:
             if c.format == FORMAT.Brown:
-                loaders += [TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=batch_size, dataset_path=os.path.abspath(c.path), fliprot=fliprot,
-                                                n_triplets=self.n_pairs, transform_dict=c.transform_dict, group_id=c.group_id)]
+                loaders += [TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=self.batch_size, dataset_path=os.path.abspath(c.path), fliprot=self.fliprot,
+                                                n_tuples=self.n_tuples, transform_dict=c.transform_dict, group_id=c.group_id)]
             elif c.format == FORMAT.AMOS:
                 loaders += [WBSDataset(root=c.tower_dataset, split_name=c.split_name, n_patch_sets=c.n_patch_sets,
-                    weight_function=c.weight_function, grayscale=True, download=False, group_id=c.group_id,
-                    n_pairs=c.n_pairs, batch_size=c.batch_size, fliprot=c.fliprot, transform=c.transform, cams_in_batch=c.cams_in_batch, patch_gen=c.patch_gen)]
+                                       weight_function=c.weight_function, grayscale=True, download=False, group_id=c.group_id,
+                                       n_tuples=self.n_tuples, batch_size=c.batch_size, fliprot=c.fliprot, transform=c.transform, cams_in_batch=c.cams_in_batch, patch_gen=c.patch_gen)]
             else:
                 raise('invalid DS format')
-
-        # for gid in self.group_ids:
-        #     self.gid_to_DS[gid] = [c for c in datasets if gid in c.group_id]
-        #     sum_of_sizes = sum([c.batch_size for c in self.gid_to_DS[gid]])
-        #     for DS in self.gid_to_DS[gid]:
-        #         DS.batch_size = int((DS.batch_size / sum_of_sizes) * batch_size)
 
         self.gid_to_loaders = {}
         for gid in self.group_ids:
             rel_loaders = [c for c in loaders if gid in c.group_id]
             sum_of_sizes = sum([c.batch_size for c in rel_loaders])
             for loader in rel_loaders:
-                loader.pom_batch_size = int((loader.batch_size / sum_of_sizes) * batch_size)
+                loader.pom_batch_size = int((loader.batch_size / sum_of_sizes) * self.batch_size)
+                loader.n_tuples = int(loader.n_tuples * (loader.pom_batch_size / self.batch_size))
             self.gid_to_loaders[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.pom_batch_size, shuffle=False, **kwargs)) for c in rel_loaders]
 
-        # self.gid_to_loaders = {}
-        # for gid in self.group_ids:
-        #     self.gid_to_loaders[gid] = []
-        #     for DS in self.gid_to_DS[gid]:
-        #         self.gid_to_loaders[gid] += [torch.utils.data.DataLoader(
-        #                 TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=batch_size, dataset_path=os.path.abspath(DS.path), fliprot=fliprot,
-        #                                     n_triplets=self.n_pairs, transform_dict=DS.transform_dict),
-        #             batch_size=DS.batch_size, shuffle=False, **kwargs)]
-        #         self.gid_to_loaders[gid] = [iter(c) for c in self.gid_to_loaders[gid]]
+    def __init__(self, datasets:[One_DS], n_tuples, batch_size, fliprot=False):
+        self.n_tuples = n_tuples
+        self.group_ids = list(set().union(*[c.group_id for c in datasets]))
+        self.gid_to_DS = {}
+        self.b_size = batch_size
+        self.datasets = datasets
+        self.fliprot = fliprot
+        self.batch_size = batch_size
+        self.prepare_epoch()
 
-    def __getitem__(self, _):
+    def __getitem__(self, idx):
+        if idx > int(self.n_tuples / self.batch_size):
+            raise StopIteration
+        # print(_, )
         gid = random.choice(self.group_ids)
-        data_a, data_p = next(self.gid_to_loaders[gid][0])
+        data = next(self.gid_to_loaders[gid][0])
+        data_a, data_p = data
         for loader in self.gid_to_loaders[gid][1:]:
             pom_a, pom_p = next(loader)
             data_a = torch.cat((data_a.float(), pom_a.float()))
@@ -685,8 +685,8 @@ class DS_wrapper():
         return data_a, data_p
 
     def __len__(self):
-        # return int(self.n_pairs / self.b_size)
-        return int(self.n_pairs)
+        return int(self.n_tuples / self.batch_size)
+        # return int(self.n_tuples)
 
 if __name__ == '__main__':
     Fire(Interface)

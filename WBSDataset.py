@@ -78,7 +78,7 @@ class WBSDataset(data.Dataset):
     """
     def __init__(self, root, path_to_train_test_split = None, split_name = 'full', transform = None, n_patch_sets = 1000, n_positives = 2,
                  patch_size = 96, weight_function = None, grayscale = True, max_tilt = 1.0, group_id=[0],
-                 border = 5, download = False, overwrite = False, n_pairs = 2000, batch_size = 1024, fliprot = False,
+                 border = 5, download = False, overwrite = False, n_tuples = 2000, batch_size = 1024, fliprot = False,
                  patch_gen='oneImg', masks_dir=None, mark_patches_dir=None, new_angles=0, cams_in_batch=0, spx=0, spy=0, save_losses=False, NMS=False):
         self.tpl =  tforms.ToPILImage()
         self.ttsr =  tforms.ToTensor()
@@ -96,7 +96,7 @@ class WBSDataset(data.Dataset):
         self.download = download
         self.border = border
         self.batch_size = batch_size
-        self.n_pairs = n_pairs
+        self.n_pairs = n_tuples
         self.fliprot = fliprot
         self.group_id = group_id
 
@@ -141,11 +141,16 @@ class WBSDataset(data.Dataset):
             raise RuntimeError('Dataset not found.' + ' You can use download=True to download it')
         self.pairs = []
         if self.patch_gen == 'watchGood':
-            self.indices = self.generate_pairs_new(n_pairs, batch_size)
+            self.indices = self.generate_pairs_new(n_tuples, batch_size)
         else:
-            self.indices = self.generate_tuples(n_pairs, batch_size)
+            self.indices = self.generate_tuples(n_tuples, batch_size)
+
+    # def __iter__(self):
+    #     pass
+    #     return self
 
     def __getitem__(self, index):
+    # def __getitem__(self, index):
     # Args: index (int): Index
     # Returns: list: [data1, data2, ..., dataN]
     #     all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
@@ -182,13 +187,11 @@ class WBSDataset(data.Dataset):
 
                 imgs = [torch.from_numpy(deepcopy(c.numpy()[:,:,::-1])) for c in imgs]
 
-        return img_a, img_p, c1n1n2[0] if self.save_losses else imgs
+        return (imgs, c1n1n2[0]) if self.save_losses else imgs
 
     def __len__(self):
-        # if self.train:
-        return len(self.indices)
-        # else:
-        #     return self.patch_sets.size(0)
+        # return self.n_pairs
+        return 999999999
 
     def _check_downloaded(self):
         # return os.path.exists(self.data_dir)
