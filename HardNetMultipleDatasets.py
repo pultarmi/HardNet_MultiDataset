@@ -131,9 +131,9 @@ save_name = '_'.join([str(c) for c in txt])
 # triplet_flag = (args.batch_reduce == 'random_global') or args.gor
 
 test_dataset_names = []
-# test_dataset_names += ['liberty']
-# test_dataset_names += ['notredame']
-# test_dataset_names += ['yosemite']
+test_dataset_names += ['liberty']
+test_dataset_names += ['notredame']
+test_dataset_names += ['yosemite']
 # test_dataset_names += ['amos_10K']
 
 cudnn.benchmark = True
