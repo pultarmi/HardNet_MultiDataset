@@ -166,7 +166,7 @@ transform_AMOS = transforms.Compose([transforms.ToPILImage(),
                                      transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
                                      transforms.ToTensor()])
 
-def create_loaders():
+def get_test_loaders():
     kwargs = {'num_workers': 1, 'pin_memory': True}
     test_loaders = [
         {'name': name,
@@ -289,22 +289,23 @@ def main(train_loader, test_loaders, model):
 
 if __name__ == '__main__':
     model = HardNet()
-    test_loaders = create_loaders()
 
     datasets_path = path.join(args.dataroot, 'Train')
     datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
     DSs = []
-    for i in range(len(datasets_path)):
-        DSs += [One_DS(Args_Brown(datasets_path[i], 1, True, normal_transform), group_id=[i])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 1, True, normal_transform), group_id=[0])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty_harris.pt', 1, True, normal_transform), group_id=[1])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame.pt', 1, True, normal_transform), group_id=[2])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 1, True, normal_transform), group_id=[3])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 1, True, normal_transform), group_id=[4])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 1, True, normal_transform), group_id=[5])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 1, True, normal_transform), group_id=[0,1,2,3,4,5])]
     DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
-                             args.patch_gen, args.cams_in_batch), group_id=list(range(len(datasets_path))))]
-        # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0,1])]
-        # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.Brown, group_id=[0])]
-        # DSs += [One_DS(datasets_path[0], 5, True, easy_transform, FORMAT.AMOS, group_id=[1])]
+                             args.patch_gen, args.cams_in_batch), group_id=[0,1,2,3,4,5])]
 
     wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
-    main(wrapper, test_loaders, model)
+    main(wrapper, get_test_loaders(), model)
     print('Train end, saved: {}'.format(save_name))
     send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful fo training, change the recipient address for yours or comment this out
