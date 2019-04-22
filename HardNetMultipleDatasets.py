@@ -186,38 +186,40 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         else:
             data_a, data_p = data
 
-        def fce(data_a, data_p, change_lr=True):
-            data_a, data_p = Variable(data_a.cuda()), Variable(data_p.cuda())
-            out_a, out_p = model(data_a), model(data_p)
+        # def fce(data_a, data_p, change_lr=True):
+        data_a, data_p = Variable(data_a.cuda()), Variable(data_p.cuda())
+        out_a, out_p = model(data_a), model(data_p)
 
-            if load_triplets:
-                data_n = data_n.cuda()
-                data_n = Variable(data_n)
-                out_n = model(data_n)
+        if load_triplets:
+            data_n = data_n.cuda()
+            data_n = Variable(data_n)
+            out_n = model(data_n)
 
-            if args.batch_reduce == 'L2Net':
-                loss = loss_L2Net( out_a, out_p, anchor_swap=args.anchorswap, margin=args.margin, loss_type=args.loss )
-            elif args.batch_reduce == 'random_global':
-                loss = loss_random_sampling( out_a, out_p, out_n, margin=args.margin, anchor_swap=args.anchorswap, loss_type=args.loss )
-            else:
-                loss = loss_HardNet( out_a, out_p, margin=args.margin, anchor_swap=args.anchorswap, anchor_ave=args.anchorave, batch_reduce=args.batch_reduce, loss_type=args.loss )
-                loss = loss.mean()
+        if args.batch_reduce == 'L2Net':
+            loss = loss_L2Net( out_a, out_p, anchor_swap=args.anchorswap, margin=args.margin, loss_type=args.loss )
+        elif args.batch_reduce == 'random_global':
+            loss = loss_random_sampling( out_a, out_p, out_n, margin=args.margin, anchor_swap=args.anchorswap, loss_type=args.loss )
+        else:
+            loss = loss_HardNet( out_a, out_p, margin=args.margin, anchor_swap=args.anchorswap, anchor_ave=args.anchorave, batch_reduce=args.batch_reduce, loss_type=args.loss )
+            loss = loss.mean()
 
-            if args.decor:
-                loss += CorrelationPenaltyLoss()(out_a)
+        if args.decor:
+            loss += CorrelationPenaltyLoss()(out_a)
 
-            if args.gor:
-                loss += args.alpha * global_orthogonal_regularization(out_a, out_n)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            if change_lr:
-                adjust_learning_rate( optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs )
-            if batch_idx % args.log_interval == 0:
-                pbar.set_description( 'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        epoch, batch_idx * len(data_a), len(train_loader)*len(data_a), 100. * batch_idx / len(train_loader), loss.item()) )
+        if args.gor:
+            loss += args.alpha * global_orthogonal_regularization(out_a, out_n)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # if change_lr:
+        pom = adjust_learning_rate( optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs )
+        if pom < 0:
+            return
+        if batch_idx % args.log_interval == 0:
+            pbar.set_description( 'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                    epoch, batch_idx * len(data_a), len(train_loader)*len(data_a), 100. * batch_idx / len(train_loader), loss.item()) )
 
-        fce(data_a, data_p)
+        # fce(data_a, data_p)
 
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
     save_path = '{}{}/checkpoint_{}.pth'.format(args.model_dir, save_name, epoch)

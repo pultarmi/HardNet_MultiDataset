@@ -191,11 +191,10 @@ def line_prepender(filename, line):
         f.write(line.rstrip('\r\n') + '\n' + content)
     return
 
-
-
 def adjust_learning_rate(optimizer, orig_lr, batch_size, n_triplets, epochs):
 # Updates the learning rate given the learning rate decay.
 # The routine has been implemented according to the original Lua SGD optimizer
+    out = 0
     for group in optimizer.param_groups:
         if 'no_grad' in group.keys():
             continue
@@ -204,7 +203,8 @@ def adjust_learning_rate(optimizer, orig_lr, batch_size, n_triplets, epochs):
         else:
             group['step'] += 1.
         group['lr'] = orig_lr * ( 1.0 - float(group['step']) * float(batch_size) / (n_triplets * float(epochs)) )
-    return
+        out = group['lr']
+    return out
 
 def create_optimizer(hardnet, new_lr, optimizer_name, wd, unet=None):
 # setup optimizer
