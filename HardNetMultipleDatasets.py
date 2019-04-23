@@ -214,7 +214,7 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         # if change_lr:
         pom = adjust_learning_rate( optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs )
         if pom < 0:
-            return
+            break
         if batch_idx % args.log_interval == 0:
             pbar.set_description( 'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data_a), len(train_loader)*len(data_a), 100. * batch_idx / len(train_loader), loss.item()) )
