@@ -133,9 +133,6 @@ save_name = '_'.join([str(c) for c in txt])
 # triplet_flag = (args.batch_reduce == 'random_global') or args.gor
 
 # test_dataset_names = []
-# test_dataset_names += ['liberty']
-# test_dataset_names += ['notredame']
-# test_dataset_names += ['yosemite']
 # test_dataset_names += ['amos_10K']
 
 cudnn.benchmark = True
@@ -224,7 +221,8 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         # fce(data_a, data_p)
 
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
-    save_path = '{}{}/checkpoint_{}.pth'.format(args.model_dir, save_name, epoch)
+    # save_path = '{}{}/checkpoint_{}.pth'.format(args.model_dir, save_name, epoch)
+    save_path = os.path.join(args.model_dir, save_name, 'checkpoint_{}.pth'.format(epoch))
     torch.save( {'epoch': epoch + 1, 'state_dict': model.state_dict()}, save_path)
     print('saving to: {}'.format(save_path))
     print_lr(optimizer)
@@ -292,21 +290,6 @@ def main(train_loader, test_loaders, model):
             test( test_loader['dataloader'], model, epoch, test_loader['name'], args )
 
 if __name__ == '__main__':
-    model = HardNet()
-
-    # datasets_path = path.join(args.dataroot, 'Train')
-    # datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
-    # DSs = []
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 1, True, normal_transform), group_id=[0])]
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty_harris.pt', 1, True, normal_transform), group_id=[1])]
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame.pt', 1, True, normal_transform), group_id=[2])]
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 1, True, normal_transform), group_id=[3])]
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 1, True, normal_transform), group_id=[4])]
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 1, True, normal_transform), group_id=[5])]
-    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 1, True, normal_transform), group_id=[0,1,2,3,4,5])]
-    # DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
-    #                          args.patch_gen, args.cams_in_batch), group_id=[0,1,2,3,4,5])]
-
     DSs = []
     DSs += [One_DS(Args_Brown('Datasets/liberty.pt', 2, True, normal_transform), group_id=[0])]
     DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', 2, True, normal_transform), group_id=[1])]
@@ -323,8 +306,14 @@ if __name__ == '__main__':
     # each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by relative sizes)
 
     wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
+
+    os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
+    with open(os.path.join(args.model_dir, save_name, 'setup.txt'), 'w') as f:
+        for d in wrapper.datasets:
+            print(str(d), file=f)
+
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
-    main(wrapper, get_test_loaders(), model)
+    main(wrapper, get_test_loaders(), HardNet())
     print('Train end, saved: {}'.format(save_name))
     send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful fo training, change the recipient address for yours or comment this out
