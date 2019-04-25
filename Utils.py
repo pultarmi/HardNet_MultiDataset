@@ -623,7 +623,7 @@ class One_DS():
         else:
             raise('incorrect args class')
         self.group_id = group_id
-        # bcolors.p(bcolors.YELLOW, str(self.__dict__))
+        bcolors.p(bcolors.YELLOW, str(self.__dict__))
 
 class DS_wrapper():
     def prepare_epoch(self):
@@ -649,10 +649,7 @@ class DS_wrapper():
                 # print(loader.pom_batch_size, loader.batch_size, (loader.batch_size / sum_of_sizes))
                 loader.n_tuples = int(loader.n_tuples * (loader.pom_batch_size / self.batch_size))
             self.gid_to_loaders[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.pom_batch_size, shuffle=False, **kwargs)) for c in rel_loaders]
-
-        for loader in loaders:
-            # print(loader)
-            bcolors.p(bcolors.YELLOW, str(loader.__dict__))
+            print('group {} b_sizes: {}'.format(gid, [c.pom_batch_size for c in rel_loaders]))
 
     def __init__(self, datasets:[One_DS], n_tuples, batch_size, fliprot=False):
         self.n_tuples = n_tuples

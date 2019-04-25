@@ -295,17 +295,27 @@ if __name__ == '__main__':
     datasets_path = path.join(args.dataroot, 'Train')
     datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
     DSs = []
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 1, True, normal_transform), group_id=[0])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 1, True, normal_transform), group_id=[0])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty_harris.pt', 1, True, normal_transform), group_id=[1])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame.pt', 1, True, normal_transform), group_id=[2])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 1, True, normal_transform), group_id=[3])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 1, True, normal_transform), group_id=[4])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 1, True, normal_transform), group_id=[5])]
+    # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 1, True, normal_transform), group_id=[0,1,2,3,4,5])]
+    # DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
+    #                          args.patch_gen, args.cams_in_batch), group_id=[0,1,2,3,4,5])]
+    DSs = []
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 2, True, normal_transform), group_id=[0])]
     DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty_harris.pt', 1, True, normal_transform), group_id=[1])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame.pt', 1, True, normal_transform), group_id=[2])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 1, True, normal_transform), group_id=[3])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 1, True, normal_transform), group_id=[4])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 1, True, normal_transform), group_id=[5])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 1, True, normal_transform), group_id=[0,1,2,3,4,5])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame.pt', 2, True, normal_transform), group_id=[2])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 2, True, normal_transform), group_id=[3])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 2, True, normal_transform), group_id=[4])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 2, True, normal_transform), group_id=[5])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=[0,1,2,3,4,5])]
     DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
                              args.patch_gen, args.cams_in_batch), group_id=[0,1,2,3,4,5])]
 
-    wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
+    wrapper = DS_wrapper(DSs, args.n_triplets, 5*args.batch_size)
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
     main(wrapper, get_test_loaders(), model)
