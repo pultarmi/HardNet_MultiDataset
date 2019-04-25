@@ -1009,7 +1009,7 @@ class WBSDataset(data.Dataset):
             patches, lafs, idxs_good = self.generate_LAFs_and_patches_from_dir(img_dir, num_patches)
 
             min_num_pics = min(min_num_pics, patches.shape[1])
-            print_log(img_dir, 'this_seq_len: '+str(patches.shape[1])+', min_seq_len: '+str(min_num_pics))
+            # print_log(img_dir, 'this_seq_len: '+str(patches.shape[1])+', min_seq_len: '+str(min_num_pics))
 
             self.idxs_good += [idxs_good]
 

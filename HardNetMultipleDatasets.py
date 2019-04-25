@@ -11,24 +11,13 @@ If you use this code, please cite
     title = "{Working hard to know your neighbor's margins:Local descriptor learning loss}",
      year = 2017}
 (c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
+and
 """
 
 from __future__ import division, print_function
-from copy import deepcopy
-import random, cv2, copy, os, sys, torch, argparse, PIL
 import torch.nn.init
-import torch.nn as nn
-import torch.optim as optim
-import torchvision.datasets as dset
 import torchvision.transforms as transforms
-from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
-from tqdm import tqdm
-import numpy as np
-from EvalMetrics import ErrorRateAt95Recall#, ErrorRateFDRAt95Recall, convertFDR2FPR, convertFPR2FDR
-from Losses import loss_HardNet, loss_random_sampling, loss_L2Net, global_orthogonal_regularization
-from W1BS import w1bs_extract_descs_and_save
-# from Utils import adjust_learning_rate, HardNet, TripletPhotoTour, create_optimizer, L2Norm, cv2_scale, np_reshape32, np_reshape64, str2bool, test, HardNetPS
 from Utils import *
 from HandCraftedModules import get_WF_from_string
 import torch.nn as nn
@@ -170,7 +159,7 @@ def get_test_loaders():
     test_loaders = [
         {'name': name,
          'dataloader': torch.utils.data.DataLoader(
-            TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets = 1000, root=path.join('Datasets', 'Test'), name=name, download=True, transform=transform),
+            TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets = 1000, root=path.join('Datasets'), name=name, download=True, transform=transform),
             batch_size=args.test_batch_size, shuffle=False, **kwargs)} for name in ['liberty', 'notredame', 'yosemite']]
 
     return test_loaders
@@ -185,7 +174,6 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         else:
             data_a, data_p = data
 
-        # def fce(data_a, data_p, change_lr=True):
         data_a, data_p = Variable(data_a.cuda()), Variable(data_p.cuda())
         out_a, out_p = model(data_a), model(data_p)
 
@@ -210,15 +198,13 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        # if change_lr:
+
         pom = adjust_learning_rate( optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs )
         if pom < 0: # just to be sure - never ascend
             break
         if batch_idx % args.log_interval == 0:
             pbar.set_description( 'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     epoch, batch_idx * len(data_a), len(train_loader)*len(data_a), 100. * batch_idx / len(train_loader), loss.item()) )
-
-        # fce(data_a, data_p)
 
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
     # save_path = '{}{}/checkpoint_{}.pth'.format(args.model_dir, save_name, epoch)
