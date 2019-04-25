@@ -294,8 +294,8 @@ def main(train_loader, test_loaders, model):
 if __name__ == '__main__':
     model = HardNet()
 
-    datasets_path = path.join(args.dataroot, 'Train')
-    datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
+    # datasets_path = path.join(args.dataroot, 'Train')
+    # datasets_path = sorted([os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path) if '.pt' in dataset])
     # DSs = []
     # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 1, True, normal_transform), group_id=[0])]
     # DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty_harris.pt', 1, True, normal_transform), group_id=[1])]
