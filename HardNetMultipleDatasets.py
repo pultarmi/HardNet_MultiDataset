@@ -312,15 +312,15 @@ if __name__ == '__main__':
     DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 2, True, normal_transform), group_id=[3])]
     DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 2, True, normal_transform), group_id=[4])]
     DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 2, True, normal_transform), group_id=[5])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=[0,1,2,3,4,5])]
+    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=list(range(6,12)))]
     DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
-                             args.patch_gen, args.cams_in_batch), group_id=[0,1,2,3,4,5])]
+                             args.patch_gen, args.cams_in_batch), group_id=list(range(12)))]
 
     # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
     # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
     # each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by relative sizes)
 
-    wrapper = DS_wrapper(DSs, args.n_triplets, 5*args.batch_size)
+    wrapper = DS_wrapper(DSs, args.n_triplets, 3*args.batch_size)
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
     main(wrapper, get_test_loaders(), model)
