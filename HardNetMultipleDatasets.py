@@ -51,9 +51,10 @@ class CorrelationPenaltyLoss(nn.Module):
         return torch.sqrt(d_sq.sum()) / input.size(0)
 
 parser = argparse.ArgumentParser(description='PyTorch HardNet')
-parser.add_argument('--dataroot', type=str, default='../Process_DS/Datasets/', help='path to dataset')
+# parser.add_argument('--dataroot', type=str, default='../Process_DS/Datasets/', help='path to dataset')
 parser.add_argument('--model-dir', default='models/', help='folder to output model checkpoints')
-parser.add_argument('--training-set', default='FullBrown6', help='Other options: notredame, yosemite')
+# parser.add_argument('--training-set', default='FullBrown6', help='Other options: notredame, yosemite')
+parser.add_argument('--name', default='', help='Other options: notredame, yosemite')
 parser.add_argument('--loss', default='triplet_margin', help='Other options: softmax, contrastive')
 parser.add_argument('--batch-reduce', default='min', help='Other options: average, random, random_global, L2Net')
 # parser.add_argument('--num-workers', default=1, help='Number of workers to be created') # but is separate to amos/6Brown
@@ -81,7 +82,7 @@ parser.add_argument('--wd', default=1e-4, type=float, metavar='W', help='weight 
 parser.add_argument('--optimizer', default='sgd', type=str, metavar='OPT', help='The optimizer to use (default: SGD)')
 parser.add_argument('--n-patch-sets', type=int, default=30000, help='How many patch sets to generate. 300k is ~ 6000 per image seq for HPatches')
 parser.add_argument('--id', type=int, default=0, help='id')
-parser.add_argument('--tower-dataset', type=str, default='', help='path to HSequences-like dataset (one dir per seq with homographies)')
+# parser.add_argument('--tower-dataset', type=str, default='', help='path to HSequences-like dataset (one dir per seq with homographies)')
 
 # parser.add_argument('--n-positives', type=int, default=2, help='How many positive patches to generate per point. Max number == # images in seq.')
 
@@ -116,9 +117,10 @@ txt += ['spy:'+str(args.spy)]
 split_name = '_'.join(txt)
 
 txt = []
-txt += [path.basename(args.tower_dataset).lower()]
+# txt += [path.basename(args.tower_dataset).lower()]
 txt += ['id:'+str(args.id)]
-txt += ['TrS:'+args.training_set]
+txt += ['TrS:'+args.name]
+# txt += ['TrS:'+args.training_set]
 txt += [split_name]
 txt += [args.batch_reduce]
 txt += ['tps:'+str(args.n_triplets)]
@@ -130,10 +132,10 @@ save_name = '_'.join([str(c) for c in txt])
 
 # triplet_flag = (args.batch_reduce == 'random_global') or args.gor
 
-test_dataset_names = []
-test_dataset_names += ['liberty']
-test_dataset_names += ['notredame']
-test_dataset_names += ['yosemite']
+# test_dataset_names = []
+# test_dataset_names += ['liberty']
+# test_dataset_names += ['notredame']
+# test_dataset_names += ['yosemite']
 # test_dataset_names += ['amos_10K']
 
 cudnn.benchmark = True
@@ -171,8 +173,8 @@ def get_test_loaders():
     test_loaders = [
         {'name': name,
          'dataloader': torch.utils.data.DataLoader(
-            TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets = 1000, root=path.join(args.dataroot, 'Test'), name=name, download=False, transform=transform),
-            batch_size=args.test_batch_size, shuffle=False, **kwargs)} for name in test_dataset_names]
+            TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets = 1000, root=path.join('Datasets', 'Test'), name=name, download=True, transform=transform),
+            batch_size=args.test_batch_size, shuffle=False, **kwargs)} for name in ['liberty', 'notredame', 'yosemite']]
 
     return test_loaders
 
@@ -306,21 +308,21 @@ if __name__ == '__main__':
     #                          args.patch_gen, args.cams_in_batch), group_id=[0,1,2,3,4,5])]
 
     DSs = []
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty.pt', 2, True, normal_transform), group_id=[0])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/liberty_harris.pt', 2, True, normal_transform), group_id=[1])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame.pt', 2, True, normal_transform), group_id=[2])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/notredame_harris.pt', 2, True, normal_transform), group_id=[3])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite.pt', 2, True, normal_transform), group_id=[4])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/yosemite_harris.pt', 2, True, normal_transform), group_id=[5])]
-    DSs += [One_DS(Args_Brown('../Process_DS/Datasets_view_types/Train/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=list(range(6,12)))]
-    DSs += [One_DS(Args_AMOS(args.tower_dataset, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
+    DSs += [One_DS(Args_Brown('Datasets/liberty.pt', 2, True, normal_transform), group_id=[0])]
+    DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', 2, True, normal_transform), group_id=[1])]
+    DSs += [One_DS(Args_Brown('Datasets/notredame.pt', 2, True, normal_transform), group_id=[2])]
+    DSs += [One_DS(Args_Brown('Datasets/notredame_harris.pt', 2, True, normal_transform), group_id=[3])]
+    DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', 2, True, normal_transform), group_id=[4])]
+    DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', 2, True, normal_transform), group_id=[5])]
+    DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=list(range(6,12)))]
+    DSs += [One_DS(Args_AMOS('Datasets/Handpicked_v3_png', split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
                              args.patch_gen, args.cams_in_batch), group_id=list(range(12)))]
 
     # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
     # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
     # each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by relative sizes)
 
-    wrapper = DS_wrapper(DSs, args.n_triplets, 3*args.batch_size)
+    wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
     main(wrapper, get_test_loaders(), model)
