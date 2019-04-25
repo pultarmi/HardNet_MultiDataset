@@ -91,7 +91,7 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='LI', help='
 parser.add_argument('--regen-each-iter', type=str2bool, default=False, help='Regenerate keypoints each iteration, default True')
 
 # parser.add_argument('--new-patches', type=int, default=0, help='Use new method to generate patches')
-parser.add_argument('--masks-dir', type=str, default=None, help='you can specify where masks are saved')
+# parser.add_argument('--masks-dir', type=str, default=None, help='you can specify where masks are saved')
 parser.add_argument('--mark-patches-dir', type=str, default=None, help='you can specify where masks are saved')
 parser.add_argument('--cams-in-batch', type=int, default=0, help='you can specify where masks are saved')
 
@@ -315,8 +315,8 @@ if __name__ == '__main__':
     DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', 2, True, normal_transform), group_id=[4])]
     DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', 2, True, normal_transform), group_id=[5])]
     DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=list(range(6,12)))]
-    DSs += [One_DS(Args_AMOS('Datasets/Handpicked_v3_png', split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), 1, True, transform_AMOS,
-                             args.patch_gen, args.cams_in_batch), group_id=list(range(12)))]
+    DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', 1, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
+                             args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks/png'), group_id=list(range(12)))]
 
     # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
     # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch

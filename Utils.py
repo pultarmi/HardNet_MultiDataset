@@ -594,23 +594,24 @@ class FORMAT(Enum):
     Brown = 1
 
 class Args_Brown():
-    def __init__(self, path:str, relative_batch_size:int, fliprot:bool, transform_dict:dict):
+    def __init__(self, path:str, relative_batch_size, fliprot:bool, transform_dict:dict):
         self.path = path
         self.batch_size = relative_batch_size
         self.fliprot = fliprot
         self.transform_dict = transform_dict
 
 class Args_AMOS():
-    def __init__(self, tower_dataset, split_name, n_patch_sets, weight_function, batch_size, fliprot, transform, patch_gen, cams_in_batch):
+    def __init__(self, tower_dataset, relative_batch_size, split_name, n_patch_sets, weight_function, fliprot, transform, patch_gen, cams_in_batch, masks_dir=None):
         self.tower_dataset = tower_dataset
         self.split_name = split_name
         self.n_patch_sets = n_patch_sets
         self.weight_function = weight_function
-        self.batch_size = batch_size
+        self.batch_size = relative_batch_size
         self.fliprot = fliprot
         self.transform = transform
         self.patch_gen = patch_gen
         self.cams_in_batch = cams_in_batch
+        self.masks_dir = masks_dir
 
 class One_DS():
     def __init__(self, args, group_id:[int]=[0]):
@@ -634,7 +635,7 @@ class DS_wrapper():
                 loaders += [TotalDatasetsLoader(train=True, load_random_triplets=False, batch_size=c.batch_size, dataset_path=os.path.abspath(c.path), fliprot=c.fliprot,
                                                 n_tuples=self.n_tuples, transform_dict=c.transform_dict, group_id=c.group_id)]
             elif c.format == FORMAT.AMOS:
-                loaders += [WBSDataset(root=c.tower_dataset, split_name=c.split_name, n_patch_sets=c.n_patch_sets,
+                loaders += [WBSDataset(root=c.tower_dataset, split_name=c.split_name, n_patch_sets=c.n_patch_sets, masks_dir=c.masks_dir,
                                        weight_function=c.weight_function, grayscale=True, download=False, group_id=c.group_id,
                                        n_tuples=self.n_tuples, batch_size=c.batch_size, fliprot=c.fliprot, transform=c.transform, cams_in_batch=c.cams_in_batch, patch_gen=c.patch_gen)]
             else:
