@@ -111,7 +111,7 @@ txt = []
 txt += ['PS:'+str(args.n_patch_sets)+'PP']
 txt += ['WF:'+args.weight_function]
 txt += ['PG:'+args.patch_gen]
-txt += ['masks:'+str(int(args.masks_dir is not None))]
+# txt += ['masks:'+str(int(args.masks_dir is not None))]
 txt += ['spx:'+str(args.spx)]
 txt += ['spy:'+str(args.spy)]
 split_name = '_'.join(txt)
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', 2, True, normal_transform), group_id=[5])]
     DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', 2, True, normal_transform), group_id=list(range(6,12)))]
     DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', 1, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
-                             args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks/png'), group_id=list(range(12)))]
+                             args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks'), group_id=list(range(12)))]
 
     # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
     # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
