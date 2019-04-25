@@ -296,7 +296,7 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
     with open(os.path.join(args.model_dir, save_name, 'setup.txt'), 'w') as f:
         for d in wrapper.datasets:
-            print(str(d), file=f)
+            print(d.__dict__, file=f)
 
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
