@@ -16,8 +16,11 @@ Please cite us if you use this code:
     title = "{Working hard to know your neighbor's margins:Local descriptor learning loss}",
     year = 2017}
 (c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
+```
 
-@article{[HardNetAMOS2019](http://diglib.tugraz.at/download.php?id=5c5941d91cdd5&location=browse),
+[Leveraging Outdoor Webcams for Local Descriptor Learning](http://diglib.tugraz.at/download.php?id=5c5941d91cdd5&location=browse)
+```
+@article{HardNetAMOS2019,
     author = {Milan Pultar, Dmytro Mishkin, Jiri Matas},
     title = "{Leveraging Outdoor Webcams for Local Descriptor Learning}",
     year = 2019,
