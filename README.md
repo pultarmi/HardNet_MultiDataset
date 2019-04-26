@@ -5,7 +5,9 @@ To run the code, you must first download the datasets [AMOS_views_v3](https://dr
 [HPatches view split](https://drive.google.com/file/d/1gQu4sQ7nZP-a2p_2ffRq0V3avEBlJhQz/view?usp=sharing) into Datasets folder - see the definition in the HardNetMultipleDatasets.py file. The script provides an easy way to define source datasets and the composition of patches (how many patches in each batch from each source). The default definition is the one we used to get weights for http://cvg.dsi.unifi.it/cvg/index.php?id=caip-2019-contest#results competition.
 
 Example:
+```
 python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs=10 2>&1
+```
 
 Please cite us if you use this code:
 ```
@@ -15,7 +17,7 @@ Please cite us if you use this code:
     year = 2017}
 (c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
 
-@article{HardNetAMOS2019,
+@article{[HardNetAMOS2019](http://diglib.tugraz.at/download.php?id=5c5941d91cdd5&location=browse),
     author = {Milan Pultar, Dmytro Mishkin, Jiri Matas},
     title = "{Leveraging Outdoor Webcams for Local Descriptor Learning}",
     year = 2019,
