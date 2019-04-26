@@ -283,6 +283,7 @@ def main(train_loader, test_loaders, model):
             test( test_loader['dataloader'], model, epoch, test_loader['name'], args )
 
 if __name__ == '__main__':
+    tst = get_test_loaders()
     DSs = []
     DSs += [One_DS(Args_Brown('Datasets/liberty.pt', 2, True, normal_transform), group_id=[0])]
     DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', 2, True, normal_transform), group_id=[1])]
@@ -307,6 +308,6 @@ if __name__ == '__main__':
 
     print('----------------\nsplit_name: {}'.format(split_name))
     print('save_name: {}'.format(save_name))
-    main(wrapper, get_test_loaders(), HardNet())
+    main(wrapper, tst, HardNet())
     print('Train end, saved: {}'.format(save_name))
     send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful fo training, change the recipient address for yours or comment this out
