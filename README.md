@@ -9,7 +9,8 @@ Example:
 python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs=10 2>&1
 ```
 
-Please cite us if you use this code:
+*Please cite us if you use this code:*
+
 [Working hard to know your neighbor's margins: Local descriptor learning loss](http://cmp.felk.cvut.cz/~radenfil/publications/Mishchuk-NIPS17.pdf)
 ```
 @article{HardNet2017,
