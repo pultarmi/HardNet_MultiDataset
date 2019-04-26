@@ -16,19 +16,19 @@ python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs
 [Working hard to know your neighbor's margins: Local descriptor learning loss](http://cmp.felk.cvut.cz/~radenfil/publications/Mishchuk-NIPS17.pdf)
 ```
 @article{HardNet2017,
-    author = {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
-    title = "{Working hard to know your neighbor's margins: Local descriptor learning loss}",
-    year = 2017}
+    author 	= {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
+    title 	= "{Working hard to know your neighbor's margins: Local descriptor learning loss}",
+    year 	= 2017}
 (c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
 ```
 
 [Leveraging Outdoor Webcams for Local Descriptor Learning](http://diglib.tugraz.at/download.php?id=5c5941d91cdd5&location=browse)
 ```
 @article{HardNetAMOS2019,
-    author = {Milan Pultar, Dmytro Mishkin, Jiri Matas},
-    title = "{Leveraging Outdoor Webcams for Local Descriptor Learning}",
-    year = 2019,
-    month = feb,
-    booktitle = {Proceedings of CVWW 2019}
+    author 	= {Milan Pultar, Dmytro Mishkin, Jiri Matas},
+    title  	= "{Leveraging Outdoor Webcams for Local Descriptor Learning}",
+    year   	= 2019,
+    month    	= feb,
+    booktitle 	= {Proceedings of CVWW 2019}
 }
 ```
