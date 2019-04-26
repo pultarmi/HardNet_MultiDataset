@@ -167,7 +167,7 @@ def get_test_loaders():
         {'name': name,
          'dataloader': torch.utils.data.DataLoader(
             TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets = 1000, root=path.join('Datasets'), name=name, download=True, transform=transform),
-            batch_size=args.test_batch_size, shuffle=False, **kwargs)} for name in ['liberty', 'notredame', 'yosemite']]
+            batch_size=args.test_batch_size, shuffle=False, **kwargs)} for name in ['liberty', 'notredame', 'yosemite', 'liberty_harris', 'notredame_harris', 'yosemite_harris']]
 
     return test_loaders
 
