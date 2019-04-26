@@ -8,7 +8,7 @@ To run the code, you must first download the datasets [AMOS_views_v3](https://dr
 
 **Example:**
 ```
-python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs=10 2>&1
+python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs=10 --name=example --batch-size=3072 2>&1
 ```
 
 **Please cite us if you use this code:**
