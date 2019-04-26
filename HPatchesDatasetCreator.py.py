@@ -56,7 +56,7 @@ if __name__ == '__main__':
         output_dir  = sys.argv[2]
         splits = [c for c in sys.argv[3:]]
     except:
-        print("Wrong input format. Try python HPatchesDatasetCreator.py path_to_hpatches path_to_splits_json output_dir")
+        print("Wrong input format. Try: python HPatchesDatasetCreator.py ../hpatches-release Datasets/")
         sys.exit(1)
     os.makedirs(output_dir, exist_ok=True)
     t = 'train'
@@ -66,5 +66,3 @@ if __name__ == '__main__':
     with open(out_p, 'wb') as f:
         torch.save(res, f)
     print('Saved', out_p)
-
-# please run: python HPatchesDatasetCreator.py.py ../hpatches-release Datasets/
