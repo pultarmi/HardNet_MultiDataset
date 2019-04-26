@@ -1,14 +1,12 @@
+"""
+source (with minor changes): https://raw.githubusercontent.com/DagnyT/hardnet/master/code/dataloaders/HPatchesDatasetCreator.py
+credit goes to the author Anastasiia Mishchuk
+"""
 import os, cv2, sys, json, torch
 import numpy as np
 import torch.utils.data as data
 
-#source: https://raw.githubusercontent.com/DagnyT/hardnet/master/code/dataloaders/HPatchesDatasetCreator.py
-
 types = ['e1','e2','e3','e4','e5','ref','h1','h2','h3','h4','h5', 't1', 't2', 't3', 't4', 't5']
-# splits = ['a', 'b', 'c', 'view', 'illum']
-# splits = ['illum', 'view']
-
-# images_to_exclude = ['v_boat', 'v_graffiti', 'i_dome', 'v_wall']
 
 def mean_image(patches):
     mean = np.mean(patches)
@@ -19,11 +17,11 @@ def std_image(patches):
     return std
 
 class HPatches(data.Dataset):
-    def __init__(self, train=True, transform=None, download=False, good_fnames = []):
+    def __init__(self, train=True, transform=None):
         self.train = train
         self.transform = transform
 
-    def read_image_file(self, data_dir, excluded={'v_bark', 'v_boat', 'v_graffiti', 'v_wall'}): #'i_dome',
+    def read_image_file(self, data_dir, exclude={'v_bark', 'v_boat', 'v_graffiti', 'v_wall'}): # exclude some scenes suspected to be in CAIP2019 test set
         """Return a Tensor containing the patches"""
         print('splits:',splits)
         patches, labels, counter = [], [], 0
@@ -33,7 +31,7 @@ class HPatches(data.Dataset):
             fn = os.path.basename(directory)
             if sum([c[0]+'_' in fn for c in splits])==0:
                 continue
-            if fn in excluded:
+            if fn in exclude:
                 print('XXXXX', fn)
                 continue
             print(directory)
@@ -53,27 +51,15 @@ class HPatches(data.Dataset):
         return torch.ByteTensor(np.array(patches, dtype=np.uint8)), torch.LongTensor(labels), txts
 
 if __name__ == '__main__':
-    # need to be specified
     try:
         path_to_hpatches_dir = sys.argv[1]
-        # path_to_splits_json = sys.argv[2]
         output_dir  = sys.argv[2]
         splits = [c for c in sys.argv[3:]]
     except:
         print("Wrong input format. Try python HPatchesDatasetCreator.py path_to_hpatches path_to_splits_json output_dir")
         sys.exit(1)
-    # splits_json = json.load(open(path_to_splits_json, 'rb'))
-    # if not os.path.exists(output_dir):
-    #     os.makedirs(output_dir)
     os.makedirs(output_dir, exist_ok=True)
-    # for split in splits:
     t = 'train'
-    # if len(split) == 1:
-    #     t = 'train'
-    # else:
-    #     t = 'test'# view and illum are kind of train/test for each other
-    # good_fnames = splits_json[split][t]
-    # hPatches = HPatches(good_fnames = good_fnames)
     hPatches = HPatches(good_fnames = None)
     res = hPatches.read_image_file(path_to_hpatches_dir)
     out_p = os.path.join(output_dir, 'hpatches_split_' + '-'.join(splits) +  '_' + t + '.pt')
@@ -81,4 +67,4 @@ if __name__ == '__main__':
         torch.save(res, f)
     print('Saved', out_p)
 
-# boruvka: python HPatchesTrain.py ../hpatches-release ../HPatches
+# example: python HPatchesTrain.py ../hpatches-release ../HPatches
