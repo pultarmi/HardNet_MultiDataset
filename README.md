@@ -10,10 +10,11 @@ python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs
 ```
 
 Please cite us if you use this code:
+[Working hard to know your neighbor's margins: Local descriptor learning loss](http://cmp.felk.cvut.cz/~radenfil/publications/Mishchuk-NIPS17.pdf)
 ```
 @article{HardNet2017,
     author = {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
-    title = "{Working hard to know your neighbor's margins:Local descriptor learning loss}",
+    title = "{Working hard to know your neighbor's margins: Local descriptor learning loss}",
     year = 2017}
 (c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
 ```
