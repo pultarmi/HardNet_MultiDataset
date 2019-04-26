@@ -56,7 +56,7 @@ if __name__ == '__main__':
         output_dir  = sys.argv[2]
         splits = [c for c in sys.argv[3:]]
     except:
-        print("Wrong input format. Try: python HPatchesDatasetCreator.py ../hpatches-release Datasets/")
+        print("Wrong input format. Try: python HPatchesDatasetCreator.py ../hpatches-release Datasets/ view")
         sys.exit(1)
     os.makedirs(output_dir, exist_ok=True)
     t = 'train'
