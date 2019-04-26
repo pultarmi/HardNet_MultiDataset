@@ -67,4 +67,4 @@ if __name__ == '__main__':
         torch.save(res, f)
     print('Saved', out_p)
 
-# example: python HPatchesTrain.py ../hpatches-release ../HPatches
+# please run: python HPatchesDatasetCreator.py.py ../hpatches-release Datasets/
