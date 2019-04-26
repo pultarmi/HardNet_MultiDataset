@@ -1,7 +1,12 @@
-# HardNet_MultiDataset
-Repo provides scripts to train on multiple datasets of format of 6Brown or AMOS. Use the script HardNetMultipleDatasets.py
+Repo provides scripts to train on multiple datasets of format of 6Brown or AMOS. The main script is HardNetMultipleDatasets.py
+
+To run the code, you must first download datasets
+AMOS_views_v3 https://drive.google.com/open?id=1Dza78UlrbHKG83XZlvNKOiAHVWg3uiHn
+6Brown https://drive.google.com/drive/folders/1dxxsO8Ob2WLTHqa5nwRpsGhXfYwPSreV?usp=sharing
+HPatches view split 
+into Datasets folder - see the definition in the source code. The script provides an easy way to define source datasets and the creation of patches (ratio of num. of patches from each source). The default definition is the one we used to get weights for http://cvg.dsi.unifi.it/cvg/index.php?id=caip-2019-contest#results competition.
 
 Example:
-python -utt HardNetMultipleDatasets.py --id=1 --tower-dataset=../Process_DS/Handpicked_v3_png --weight-function=Hessian --epochs=5 --dataroot=../Process_DS/Datasets_all 2>&1
+python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs=10 2>&1
 
-**IN DEVELOPMENT**
+
