@@ -296,7 +296,7 @@ if __name__ == '__main__':
 
     # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
     # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
-    # each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by relative sizes)
+    # each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by sum of relative sizes)
 
     wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
 
