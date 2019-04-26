@@ -1,3 +1,5 @@
+**Training HardNet on multiple datasets (including AMOS views)**
+
 Repo provides scripts to train on multiple datasets of format of 6Brown or AMOS. The main script is HardNetMultipleDatasets.py
 
 To run the code, you must first download the datasets [AMOS_views_v3](https://drive.google.com/open?id=1Dza78UlrbHKG83XZlvNKOiAHVWg3uiHn) 
