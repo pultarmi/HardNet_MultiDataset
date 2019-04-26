@@ -5,15 +5,22 @@ This is HardNet local patch descriptor. The training code is based on PyTorch TF
 https://github.com/edgarriba/examples/tree/master/triplet
 by Edgar Riba.
 
-If you use this code, please cite
-@article{HardNet2017,
- author = {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
-    title = "{Working hard to know your neighbor's margins:Local descriptor learning loss}",
-     year = 2017}
-(c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
-and
-"""
+If you use this code, please cite:
 
+@article{HardNet2017,
+    author = {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
+    title = "{Working hard to know your neighbor's margins:Local descriptor learning loss}",
+    year = 2017}
+(c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
+
+@article{HardNetAMOS2019,
+    author = {Milan Pultar, Dmytro Mishkin, Jiri Matas},
+    title = "{Leveraging Outdoor Webcams for Local Descriptor Learning}",
+    year = 2019,
+    month = feb,
+    booktitle = {Proceedings of CVWW 2019}
+}
+"""
 from __future__ import division, print_function
 import torch.nn.init
 import torchvision.transforms as transforms
