@@ -70,6 +70,8 @@ parser.add_argument("--debug", default=False, action="store_true", help="verbal"
 parser.add_argument("--spx", type=float, default=0, help="sx")
 parser.add_argument("--spy", type=float, default=0, help="sy")
 
+parser.add_argument("--older", default=False, action="store_true", help="verbal")
+
 parser.add_argument(
     "--weight-function",
     type=str,
@@ -137,6 +139,33 @@ transform_AMOS = transforms.Compose(
     ]
 )
 
+if args.older: # older torchvision does not run transforms above
+    def transform_test(img):
+        img = (img.numpy()) / 255.0
+        return transforms.Compose([
+            transforms.Lambda(cv2_scale),
+            transforms.Lambda( lambda x: np.reshape(x, (32, 32, 1)) ),
+            transforms.ToTensor(),
+        ])(img)
+    def t(img):
+        img = transforms.Compose([
+            transforms.Lambda( lambda x: np.reshape(x, (1, 64, 64)) ),
+            transforms.ToPILImage(),
+            transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BICUBIC),
+            transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
+            transforms.ToTensor(),
+        ])(img)
+        return img.type(torch.float64)
+    default_transform={'default':transform_test}
+    # easy_transform={'e1':t, 'e2':t, 'e3':t, 'default':transform}
+    transform_train_1 = default_transform
+
+    transform_AMOS = transforms.Compose([transforms.ToPILImage(),
+                                         transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BICUBIC),
+                                         transforms.CenterCrop(64),
+                                         transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
+                                         transforms.ToTensor()])
+
 
 def get_test_loaders():
     kwargs = {"num_workers": 4, "pin_memory": True}
@@ -158,6 +187,7 @@ def get_test_loaders():
 
 def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
     model.train()
+    train_loader.prepare_epoch()
     pbar = tqdm(enumerate(train_loader))
     for batch_idx, data in pbar:
         data_a, data_p = data
@@ -249,14 +279,14 @@ if __name__ == "__main__":
     tst = get_test_loaders()
     DSs = []
     DSs += [One_DS(Args_Brown("Datasets/liberty.pt", 2, True, default_transform), group_id=[0])]
-    # DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', 2, True, default_transform), group_id=[1])]
-    # DSs += [One_DS(Args_Brown('Datasets/notredame.pt', 2, True, default_transform), group_id=[2])]
-    # DSs += [One_DS(Args_Brown('Datasets/notredame_harris.pt', 2, True, default_transform), group_id=[3])]
-    # DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', 2, True, default_transform), group_id=[4])]
-    # DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', 2, True, default_transform), group_id=[5])]
-    # DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', 2, True, default_transform), group_id=list(range(6,12)))]
-    # DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', 1, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
-    #                         args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks'), group_id=list(range(12)))]
+    DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', 2, True, default_transform), group_id=[1])]
+    DSs += [One_DS(Args_Brown('Datasets/notredame.pt', 2, True, default_transform), group_id=[2])]
+    DSs += [One_DS(Args_Brown('Datasets/notredame_harris.pt', 2, True, default_transform), group_id=[3])]
+    DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', 2, True, default_transform), group_id=[4])]
+    DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', 2, True, default_transform), group_id=[5])]
+    DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', 2, True, default_transform), group_id=list(range(6,12)))]
+    DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', 1, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
+                            args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks'), group_id=list(range(12)))]
 
     # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
     # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
@@ -272,4 +302,4 @@ if __name__ == "__main__":
     model = HardNet().cuda()
     main(wrapper, tst, model)
     print("Train end, saved: {}".format(save_name))
-    # send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful fo training, change the recipient address for yours or comment this out
+    # send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560') # useful for training, change the recipient address for yours or comment this out

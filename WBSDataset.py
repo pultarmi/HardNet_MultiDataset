@@ -147,10 +147,7 @@ class WBSDataset(data.Dataset):
 
         self.cam_idx = 0
 
-        # if self.train:
         self.data_file = os.path.join(self.root, "_".join([str(c) for c in [path.basename(root).lower(), self.split_name, "train.pt"]]))
-        # else:
-        #     self.data_file = os.path.join(self.root, path.basename(root).lower() + '_' + self.split_name + '_test.pt')
 
         if self.path_to_train_test_split is None:
             self.img_fnames = None
@@ -171,58 +168,24 @@ class WBSDataset(data.Dataset):
         if not self._check_datafile_exists():
             raise RuntimeError("Dataset not found." + " You can use download=True to download it")
         self.pairs = []
-        if self.patch_gen == "watchGood":
-            self.indices = self.generate_pairs_new(n_tuples, batch_size)
-        else:
-            self.indices = self.generate_tuples(n_tuples, batch_size)
 
-    # def __iter__(self):
-    #     pass
-    #     return self
+    def __getitem__(self, idx):
+        c1n1n2 = self.tuples[idx]
 
-    def __getitem__(self, index):
-        # def __getitem__(self, index):
-        # Args: index (int): Index
-        # Returns: list: [data1, data2, ..., dataN]
-        #     all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
-        #     cam_idxs = [np.array([i for i,x in enumerate(self.cam_idxs) if x==c]) for c in all_cams]
-        #     n_batches = int(self.n_pairs / self.batch_size)
-        #     cur_allowed_cams = all_cams
-        #     for _ in tqdm(range(n_batches)):
-
-        if len(self.pairs) == 0:
-            self.cur_allowed_cams = self.get_source_cams(self.all_cams, self.cur_allowed_cams, self.cams_in_batch)
-            self.allowed_idxs = list(itertools.chain.from_iterable([self.cam_idxs[c] for c in [self.all_cams.index(x) for x in self.cur_allowed_cams]]))
-            cs = np.random.choice(self.allowed_idxs, size=self.batch_size)
-            for c1 in cs:
-                ns = np.random.choice(list(range(len(self.patch_sets[c1]))), self.n_positives)
-                self.pairs += [[c1, *ns]]
-            # return torch.LongTensor(np.array(pairs))
-
-        # c1n1n2 = self.indices[
-
-        c1n1n2 = self.pairs[0]
-        self.pairs = self.pairs[1:]
         data = self.patch_sets[c1n1n2[0]]
         imgs = [data[c] for c in c1n1n2[1:]]
         if self.transform is not None:
             imgs = [self.transform(c) for c in imgs]
         if self.fliprot:  # transform images if required
-            do_flip = random.random() > 0.5
-            do_rot = random.random() > 0.5
-            if do_rot:
+            if random.random() > 0.5: # do rot
                 imgs = [c.permute(0, 2, 1) for c in imgs]
-            if do_flip:
-                # img_a = torch.from_numpy(deepcopy(img_a.detach().numpy()[:,:,::-1]))
-                # img_p = torch.from_numpy(deepcopy(img_p.detach().numpy()[:,:,::-1]))
-
+            if random.random() > 0.5: # do flip
                 imgs = [torch.from_numpy(deepcopy(c.numpy()[:, :, ::-1])) for c in imgs]
 
         return (imgs, c1n1n2[0]) if self.save_losses else imgs
 
     def __len__(self):
-        # return self.n_pairs
-        return 999999999
+        return len(self.tuples)
 
     def _check_downloaded(self):
         # return os.path.exists(self.data_dir)
@@ -242,32 +205,24 @@ class WBSDataset(data.Dataset):
         out += list(random.sample(again_classes, from_again))
         return out
 
-    def generate_tuples(self, n_pairs, batch_size):
-        pairs = []
-        self.all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
+    def generate_tuples(self):
+    # def generate_tuples(self, n_pairs, batch_size):
+        tuples = []
+        all_cams = np.unique(self.cam_idxs.numpy().astype(np.int)).tolist()
 
-        self.cam_idxs = [np.array([i for i, x in enumerate(self.cam_idxs) if x == c]) for c in self.all_cams]
-        n_batches = int(n_pairs / batch_size)
-        self.cur_allowed_cams = self.all_cams
-        # for _ in tqdm(range(n_batches)):
-        #     cur_allowed_cams = self.get_source_cams(all_cams, cur_allowed_cams, self.cams_in_batch)
-        #     allowed_idxs = list(itertools.chain.from_iterable([cam_idxs[c] for c in [all_cams.index(x) for x in cur_allowed_cams]]))
-        #
-        #     cs = np.random.choice(allowed_idxs, size=batch_size)
-        #
-        #     for c1 in cs:
-        #         # num_pos = len(self.patch_sets[c1])
-        #         ns = np.random.choice( list(range(len(self.patch_sets[c1]))), self.n_positives )
-        #         # if num_pos == 2:  # hack to speed up process
-        #         #     n1, n2 = 0, 1
-        #         # else:
-        #         #     n1 = np.random.randint(0, num_pos)
-        #         #     n2 = np.random.randint(0, num_pos)
-        #         #     while n1 == n2:
-        #         #         n2 = np.random.randint(0, num_pos)
-        #         # pairs += [[c1, n1, n2]]
-        #         pairs += [[c1, *ns]]
-        # return torch.LongTensor(np.array(pairs))
+        cam_idxs = [np.array([i for i, x in enumerate(self.cam_idxs) if x == c]) for c in all_cams]
+        cur_allowed_cams = all_cams
+
+        for batch_size in tqdm(self.bs_seq, desc='generating tuples'):
+            cur_allowed_cams = self.get_source_cams(all_cams, cur_allowed_cams, self.cams_in_batch)
+            allowed_idxs = list(itertools.chain.from_iterable([cam_idxs[c] for c in [all_cams.index(x) for x in cur_allowed_cams]]))
+
+            cs = random.sample(allowed_idxs, batch_size)
+
+            for c1 in cs:
+                ns = np.random.choice( list(range(len(self.patch_sets[c1]))), self.n_positives )
+                tuples += [[c1, *ns]]
+        self.tuples = torch.LongTensor(np.array(tuples))
 
     def generate_pairs_new(self, n_pairs, batch_size):
         pairs = []
@@ -305,24 +260,6 @@ class WBSDataset(data.Dataset):
         for i in range(len(img_fnames)):
             fname = img_fnames[i]
             img = Image.open(os.path.join(fullpath, fname))
-
-            ######### random shift ... this code is deprecated, it influences probability maps only
-            # if self.sx is not 0 or self.sy is not 0:
-            #     img = np.array(img)
-            #     img = img[:, :, ::-1].copy()
-            #     rows, cols, _ = img.shape
-            #
-            #     # sp_x, sp_y = 0.01, 0.01
-            #     max_x = int(self.sx * cols)
-            #     max_y = int(self.sy * rows)
-            #     M = np.float32([[1, 0, randint(0,2*max_x)-max_x], [0, 1, randint(0,2*max_y)-max_y]])
-            #     img = cv2.warpAffine(img, M, (cols, rows))
-            #
-            #     cv2_im = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            #     img = Image.fromarray(img)
-            # else:
-            #     print('no rotation used')
-            ######### random shift
 
             if self.grayscale:
                 img = img.convert("L")
@@ -363,7 +300,6 @@ class WBSDataset(data.Dataset):
         mask_pyr, pyr = [], []
         # img = deepcopy(img)
         pyr.append(img)
-        # w1,h1 = w,h
 
         w1 = img.width
         h1 = img.height
@@ -372,7 +308,6 @@ class WBSDataset(data.Dataset):
         while min(w1, h1) > 10:
             w1, h1 = pyr[-1].size
             new = pyr[-1].copy()
-            # print new.width,curr_mask.width
             if self.weight_function is not None:
                 weighted_mask = self.weight_function(new)
             else:
@@ -395,7 +330,6 @@ class WBSDataset(data.Dataset):
         mask_pyr, pyr = [], []
         # img = deepcopy(img)
         pyr.append(img)
-        # w1,h1 = w,h
 
         w1 = img.width
         h1 = img.height
@@ -404,7 +338,6 @@ class WBSDataset(data.Dataset):
         while min(w1, h1) > 10:
             w1, h1 = pyr[-1].size
             new = pyr[-1].copy()
-            # print new.width,curr_mask.width
             if self.weight_function is not None:
                 weighted_mask = self.weight_function(new)
             else:
@@ -418,7 +351,6 @@ class WBSDataset(data.Dataset):
 
     def generateLAFs(self, nLAFs, imtower, border=5, mask=None):
         angles = np.random.uniform(0, np.pi, (nLAFs))
-        # angles2 = np.random.uniform(0, np.pi, (nLAFs));
         tilts = np.random.uniform(1.0, self.max_tilt, (nLAFs))
         init_scale = 16
         w = imtower[0].width
@@ -437,7 +369,6 @@ class WBSDataset(data.Dataset):
         while min(w1, h1) > 10:
             w1, h1 = pyr[-1].size
             new = pyr[-1].copy()
-            # print new.width,curr_mask.width
             if self.weight_function is not None:
                 weighted_mask = self.weight_function(new)
             else:
@@ -679,32 +610,19 @@ class WBSDataset(data.Dataset):
                     mask_bin += [np.zeros(mask_curr.flatten().shape)]
                     mask_nums += np.reshape(mask_bin[-1], mask_curr.shape)
                     continue
-                # mask_curr /= mask_curr.sum()
                 x = np.linspace(sc + border, w - 1 - (sc + border), w1 - 2 * border)
                 y = np.linspace(sc + border, h - 1 - (sc + border), h1 - 2 * border)
                 xv, yv = np.meshgrid(x, y)
-                # n_centers_possible = xv.flatten()[:].shape[0]
-                # idxs = np.arange(0, n_centers_possible)
 
                 mask_sum += mask_curr
                 mask_bin += [mask_curr.flatten()]
-                # idxs_top = np.argsort(mask_bin[-1])[::-1][:len(mask_bin[-1])/2]
                 idxs_top = mask_bin[-1] > 0.05
-                # np.where( (mask_bin[-1][idxs_top]) == 0 )
                 mask_bin[-1] = np.zeros(mask_bin[-1].shape)
                 mask_bin[-1][idxs_top] = 1
                 mask_nums += np.reshape(mask_bin[-1], mask_curr.shape)
 
-            # mask_sum[mask_nums<15] = 0
             mask_sum = NMS2d()(torch.autograd.Variable(torch.Tensor(np.expand_dims(mask_sum, 0)))).data.cpu().numpy().squeeze(0)
-            # mask_sum /= mask_sum.sum()
-            # idxs_sum = np.argsort(mask_sum.flatten())[::-1]
-            # mask_dets = np.empty_like(mask_res[-1]).astype(np.int)
-            # for mmm in mask_res:
-            #     mask_dets += (mmm > 0).astype(np.int)
 
-            # out_idxs = np.random.choice(idxs, n_curr_level, p=mask_curr.flatten())
-            # out_idxs = np.random.choice(idxs, n_curr_level, p=mask_sum.flatten())
             out_idxs = np.argsort(mask_sum.flatten())[::-1][:n_curr_level]
             print("last_response: {}".format(mask_sum.flatten()[out_idxs[-1]]))
 
@@ -761,35 +679,22 @@ class WBSDataset(data.Dataset):
                     mask_bin += [np.zeros(mask_curr.flatten().shape)]
                     mask_nums += np.reshape(mask_bin[-1], mask_curr.shape)
                     continue
-                # mask_curr /= mask_curr.sum()
                 x = np.linspace(sc + border, w - 1 - (sc + border), w1 - 2 * border)
                 y = np.linspace(sc + border, h - 1 - (sc + border), h1 - 2 * border)
                 xv, yv = np.meshgrid(x, y)
-                # n_centers_possible = xv.flatten()[:].shape[0]
-                # idxs = np.arange(0, n_centers_possible)
 
                 mask_sum += mask_curr
                 mask_bin += [mask_curr.flatten()]
-                # idxs_top = np.argsort(mask_bin[-1])[::-1][:len(mask_bin[-1])/2]
                 idxs_top = mask_bin[-1] > 0.05
-                # np.where( (mask_bin[-1][idxs_top]) == 0 )
                 mask_bin[-1] = np.zeros(mask_bin[-1].shape)
                 mask_bin[-1][idxs_top] = 1
                 mask_nums += np.reshape(mask_bin[-1], mask_curr.shape)
 
-            # mask_sum[mask_nums<15] = 0
-            # mask_sum = NMS2d()(torch.autograd.Variable(torch.Tensor(np.expand_dims(mask_sum, 0))) ).data.cpu().numpy().squeeze(0)
             mask_sum /= mask_sum.sum()
-            # idxs_sum = np.argsort(mask_sum.flatten())[::-1]
-            # mask_dets = np.empty_like(mask_res[-1]).astype(np.int)
-            # for mmm in mask_res:
-            #     mask_dets += (mmm > 0).astype(np.int)
 
             n_centers_possible = xv.flatten()[:].shape[0]
             idxs = np.arange(0, n_centers_possible)
-            # out_idxs = np.random.choice(idxs, n_curr_level, p=mask_curr.flatten())
             out_idxs = np.random.choice(idxs, n_curr_level, p=mask_sum.flatten())
-            # out_idxs = np.argsort(mask_sum.flatten())[::-1][:n_curr_level]
             print("last_response: {}".format(mask_sum.flatten()[out_idxs[-1]]))
 
             centers[sc_idx, :] = np.concatenate([xv.flatten()[out_idxs].reshape(-1, 1), yv.flatten()[out_idxs].reshape(-1, 1)], axis=1)
@@ -846,37 +751,24 @@ class WBSDataset(data.Dataset):
                     mask_bin += [np.zeros(mask_curr.flatten().shape)]
                     mask_nums += np.reshape(mask_bin[-1], mask_curr.shape)
                     continue
-                # mask_curr /= mask_curr.sum()
                 x = np.linspace(sc + border, w - 1 - (sc + border), w1 - 2 * border)
                 y = np.linspace(sc + border, h - 1 - (sc + border), h1 - 2 * border)
                 xv, yv = np.meshgrid(x, y)
-                # n_centers_possible = xv.flatten()[:].shape[0]
-                # idxs = np.arange(0, n_centers_possible)
 
                 mask_sum += mask_curr
                 mask_list += [mask_curr]
                 mask_bin += [mask_curr.flatten()]
-                # idxs_top = np.argsort(mask_bin[-1])[::-1][:len(mask_bin[-1])/2]
                 idxs_top = mask_bin[-1] > 0.05
-                # np.where( (mask_bin[-1][idxs_top]) == 0 )
                 mask_bin[-1] = np.zeros(mask_bin[-1].shape)
                 mask_bin[-1][idxs_top] = 1
                 mask_nums += np.reshape(mask_bin[-1], mask_curr.shape)
 
-            # mask_sum[mask_nums<15] = 0
-            # mask_sum = NMS2d()(torch.autograd.Variable(torch.Tensor(np.expand_dims(mask_sum, 0))) ).data.cpu().numpy().squeeze(0)
             mask_sum = np.median(np.array(mask_list), 0)
             mask_sum /= mask_sum.sum()
-            # idxs_sum = np.argsort(mask_sum.flatten())[::-1]
-            # mask_dets = np.empty_like(mask_res[-1]).astype(np.int)
-            # for mmm in mask_res:
-            #     mask_dets += (mmm > 0).astype(np.int)
 
             n_centers_possible = xv.flatten()[:].shape[0]
             idxs = np.arange(0, n_centers_possible)
-            # out_idxs = np.random.choice(idxs, n_curr_level, p=mask_curr.flatten())
             out_idxs = np.random.choice(idxs, n_curr_level, p=mask_sum.flatten())
-            # out_idxs = np.argsort(mask_sum.flatten())[::-1][:n_curr_level]
             print("last_response: {}".format(mask_sum.flatten()[out_idxs[-1]]))
 
             centers[sc_idx, :] = np.concatenate([xv.flatten()[out_idxs].reshape(-1, 1), yv.flatten()[out_idxs].reshape(-1, 1)], axis=1)
@@ -962,7 +854,6 @@ class WBSDataset(data.Dataset):
         angles = np.degrees(np.random.uniform(angle_range[0], angle_range[1], (nLAFs) if (not self.see_all_in_imtower) else (nLAFs * len(imtower))))
 
         for img in imtower:
-
             def resamplePatch(LAF, ang, border, spx, spy):
                 big_PS = int(1.5 * PS)
                 A = LAF2A(LAF, w, h, big_PS)
@@ -970,16 +861,9 @@ class WBSDataset(data.Dataset):
                 top = (big_PS - PS) / 2
                 right = (PS + big_PS) / 2
                 bottom = (PS + big_PS) / 2
-                # angles2 = np.random.uniform(0, np.pi, (nLAFs))
 
                 ######### random shift ... aplies to each patch individually based on its scale
                 if spx is not 0 or spy is not 0:
-                    # init_scale = 16
-                    # min_scale = 2.0* np.exp(np.log(init_scale)) / float(big_PS)
-                    # max_scale = 2.0* np.exp(np.log(np.minimum(h, w) / 4.0 - 2 * border)) / float(big_PS)
-                    # shift_coef = (A[0,0] - min_scale) / (max_scale - min_scale)
-                    # sx = int(2* spx * w * shift_coef)
-                    # sy = int(2* spy * h * shift_coef)
                     sx = int(2 * spx * A[0, 0])
                     sy = int(2 * spy * A[0, 0])  # A[0,0] is the scale
                     A[0, 2] += random.randint(0, sx) - (sx / 2)
@@ -1039,7 +923,6 @@ class WBSDataset(data.Dataset):
             patches, lafs, idxs_good = self.generate_LAFs_and_patches_from_dir(img_dir, num_patches)
 
             min_num_pics = min(min_num_pics, patches.shape[1])
-            # print_log(img_dir, 'this_seq_len: '+str(patches.shape[1])+', min_seq_len: '+str(min_num_pics))
 
             self.idxs_good += [idxs_good]
 
@@ -1048,7 +931,6 @@ class WBSDataset(data.Dataset):
             self.cam_idxs.append(torch.ones(int(num_patches), 1) * idx)
             idx += 1
 
-        # self.patch_sets = [ppp[:,:min_num_pics,:,:] for ppp in self.patch_sets]
         print_log("", "# cams: " + str(len(self.patch_sets)))
 
         self.patch_sets = torch.cat(self.patch_sets, dim=0)
@@ -1059,7 +941,6 @@ class WBSDataset(data.Dataset):
         with open(self.data_file, "wb") as f:
             if self.patch_gen == "watchGood":
                 torch.save((self.patch_sets, self.all_lafs, self.cam_idxs, self.idxs_good), f)
-            # elif self.patch_gen in ['oneImg', 'sumImg', 'median']:
             else:
                 torch.save((self.patch_sets, self.all_lafs, self.cam_idxs), f)
 

@@ -572,7 +572,7 @@ class bcolors:
 
 
 class TotalDatasetsLoader(data.Dataset):
-    def __init__(self, dataset_path, train=True, batch_size=None, n_tuples=5000000, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
+    def __init__(self, dataset_path, train=True, batch_size=None, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
         super(TotalDatasetsLoader, self).__init__()
         dataset = torch.load(dataset_path)
         data, labels = dataset[0], dataset[1]
@@ -591,44 +591,39 @@ class TotalDatasetsLoader(data.Dataset):
         self.data, self.labels = data, labels
         self.transform_dict = transform_dict
         self.train = train
-        self.n_tuples = n_tuples
         self.batch_size = batch_size
         self.fliprot = fliprot
-        self.triplets = []
         self.group_id = group_id
-        if self.train:
-            self.generate_triplets(self.labels, self.n_tuples, self.batch_size, intervals=intervals)
 
-    def generate_triplets(self, labels, n_triplets, batch_size, intervals=None):
+    def generate_tuples(self):
         def create_indices():
             inds = dict()
-            for idx, ind in enumerate(labels):
+            for idx, ind in enumerate(self.labels):
                 ind = ind.item()
                 if ind not in inds:
                     inds[ind] = []
                 inds[ind].append(idx)
             return inds
 
-        self.indices = create_indices()
+        indices = create_indices()
+
+        self.tuples = []
+        for batch_size in tqdm(self.bs_seq, desc='generating tuples'):
+            # print(batch_size)
+            cs = random.sample(self.range_intervals[0], batch_size) # no replace
+            for c1 in cs:
+                if len(indices[c1]) == 2:
+                    n1, n2 = 0, 1
+                else:
+                    n1, n2 = random.sample(range(len(indices[c1])), 2) # this is like 10 times faster, what the heck numpy?
+                    # n1, n2 = np.random.choice(range(len(indices[c1])), size=2, replace=False)
+                self.tuples += [[indices[c1][n1], indices[c1][n2], -1]]
 
     def __getitem__(self, idx):
         def transform_img(img, transformation=None):
             return transformation(img) if transformation is not None else img
 
-        if len(self.triplets) == 0:
-            import time
-            t=time.time()
-            print ('FIXME!!!! generating idxs')
-            cs = np.random.choice(self.range_intervals[0], size=self.batch_size)
-            for c1 in cs:
-                if len(self.indices[c1]) == 2:
-                    n1, n2 = 0, 1
-                else:
-                    n1, n2 = np.random.choice(range(len(self.indices[c1])), size=2, replace=False)
-                self.triplets += [[self.indices[c1][n1], self.indices[c1][n2], -1]]
-            print ('in ', time.time() -t)
-        t = self.triplets[0]
-        self.triplets = self.triplets[1:]
+        t = self.tuples[idx]
         a, p = self.data[t[0]], self.data[t[1]]  # t[2] would be negative, not used
 
         img_a = transform_img(a, self.transform_dict[self.all_txts[t[0]]] if self.all_txts[t[0]] in self.transform_dict.keys() else self.transform_dict["default"])
@@ -645,7 +640,7 @@ class TotalDatasetsLoader(data.Dataset):
         return img_a, img_p
 
     def __len__(self):
-        return 9999999999
+        return len(self.tuples)
 
 
 class FORMAT(Enum):
@@ -690,12 +685,12 @@ class One_DS:
 
 
 class DS_wrapper:
-    def prepare_epoch(self):
-        kwargs = {"num_workers": 8//len(self.datasets), "pin_memory": True}
-        loaders = []
+    def prepare_epoch(self, gen_tuples=True):
+        kwargs = {"num_workers": max(1, 8//len(self.datasets)), "pin_memory": True}
+        self.loaders = []
         for c in self.datasets:
             if c.format == FORMAT.Brown:
-                loaders += [
+                self.loaders += [
                     TotalDatasetsLoader(
                         train=True,
                         load_random_triplets=False,
@@ -708,7 +703,7 @@ class DS_wrapper:
                     )
                 ]
             elif c.format == FORMAT.AMOS:
-                loaders += [
+                self.loaders += [
                     WBSDataset(
                         root=c.tower_dataset,
                         split_name=c.split_name,
@@ -729,16 +724,28 @@ class DS_wrapper:
             else:
                 raise ("invalid DS format")
 
-        self.gid_to_loaders = {}
+        for loader in self.loaders:
+            loader.bs = {}
+
         for gid in self.group_ids:
-            rel_loaders = [c for c in loaders if gid in c.group_id]
-            sum_of_sizes = sum([c.batch_size for c in rel_loaders])
-            for loader in rel_loaders:
-                loader.pom_batch_size = int((loader.batch_size / sum_of_sizes) * self.batch_size)
-                # print(loader.pom_batch_size, loader.batch_size, (loader.batch_size / sum_of_sizes))
-                loader.n_tuples = int(loader.n_tuples * (loader.pom_batch_size / self.batch_size))
-            self.gid_to_loaders[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.pom_batch_size, shuffle=False, **kwargs)) for c in rel_loaders]
-            print("group {} b_sizes: {}".format(gid, [c.pom_batch_size for c in rel_loaders]))
+            cur_loaders = [c for c in self.loaders if gid in c.group_id]
+            sum_of_sizes = sum([c.batch_size for c in cur_loaders])
+            for loader in cur_loaders:
+                loader.bs[gid] = int((loader.batch_size / sum_of_sizes) * self.batch_size)
+
+        if not gen_tuples:
+            return
+
+        self.gid_seq = np.random.choice(self.group_ids, size=self.n_iters()) # prepare sequence of groups for the epoch
+        # print(self.gid_seq)
+        for loader in self.loaders: # in each loader
+            loader.bs_seq = [loader.bs[c] for c in self.gid_seq if c in loader.bs.keys()]
+            loader.generate_tuples()
+
+        self.gid_to_iters = {}
+        for gid in self.group_ids:
+            cur_loaders = [c for c in self.loaders if gid in c.group_id]
+            self.gid_to_iters[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.bs[gid], shuffle=False, **kwargs)) for c in cur_loaders]
 
     def __init__(self, datasets: [One_DS], n_tuples, batch_size, fliprot=False):
         self.n_tuples = n_tuples
@@ -748,16 +755,23 @@ class DS_wrapper:
         self.datasets = datasets
         self.fliprot = fliprot
         self.batch_size = batch_size
-        self.prepare_epoch()
+        self.prepare_epoch(gen_tuples=False)
+
+        for gid in self.group_ids:
+            print("group {} b_sizes: {}".format(gid, [z.bs[gid] for z in [c for c in self.loaders if gid in c.group_id]]))
+
+    def n_iters(self):
+        return int(self.n_tuples / self.batch_size)
 
     def __getitem__(self, idx):
-        if idx > int(self.n_tuples / self.batch_size):
+        if idx >= len(self.gid_seq):
             raise StopIteration
-        gid = random.choice(self.group_ids)
+        gid = self.gid_seq[idx]
         data_a = None
         data_p = None
-        for loader in self.gid_to_loaders[gid]:
+        for loader in self.gid_to_iters[gid]:
             pom_a, pom_p = next(loader)
+            # print(pom_a.shape)
             if data_a is None:
                 data_a = pom_a.float()
                 data_p = pom_p.float()
@@ -767,7 +781,7 @@ class DS_wrapper:
         return data_a, data_p
 
     def __len__(self):
-        return int(self.n_tuples / self.batch_size)
+        return len(self.gid_seq)
 
 
 if __name__ == "__main__":
