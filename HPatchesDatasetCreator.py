@@ -24,7 +24,7 @@ class HPatches(data.Dataset):
         self.train = train
         self.transform = transform
 
-    def read_image_file(self, data_dir, exclude={"v_bark", "v_boat", "v_graffiti", "v_wall"}):  # exclude some scenes suspected to be in CAIP2019 test set
+    def read_image_file(self, data_dir, exclude={"v_bark", "v_boat", "v_graffiti", "v_wall",  "v_posters"}):  # exclude some scenes suspected to be in CAIP2019 test set
         """Return a Tensor containing the patches"""
         print("splits:", splits)
         patches, labels, counter = [], [], 0

@@ -1,11 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from copy import deepcopy
-from scipy.spatial.distance import cdist
 from numpy.linalg import inv
 from scipy.linalg import schur, sqrtm
+from copy import deepcopy
+from scipy.spatial.distance import cdist
 import torch
-from torch.autograd import Variable
 import torch.nn.functional as F
 
 ##########numpy
@@ -53,6 +52,15 @@ def LAFs2ellT(LAFs):
     ellipses[:, 4] = A[:, 1, 1]
     return ellipses
 
+def LAF2A(laf, h, w, PS=32):
+    min_size = float(min(h, w))
+    A = deepcopy(laf)
+    A[0, :2] = 2.0 * laf[0, :2] / float(PS)
+    A[1, :2] = 2.0 * laf[1, :2] / float(PS)
+    s = float(PS) * np.sqrt(np.abs(A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0]))
+    A[0, 2] = A[0, 2] - s / 2.0
+    A[1, 2] = A[1, 2] - s / 2.0
+    return A
 
 def invSqrtTorch(a, b, c):
     eps = 1e-12
@@ -274,7 +282,7 @@ def visualize_LAFs(img, LAFs, color="r", show=False, save_to=None):
 def get_normalized_affine_shape(tilt, angle_in_radians):
     assert tilt.size(0) == angle_in_radians.size(0)
     num = tilt.size(0)
-    tilt_A = Variable(torch.eye(2).view(1, 2, 2).repeat(num, 1, 1))
+    tilt_A = torch.eye(2).view(1, 2, 2).repeat(num, 1, 1)
     if tilt.is_cuda:
         tilt_A = tilt_A.cuda()
     tilt_A[:, 0, 0] = tilt.view(-1)
@@ -331,7 +339,7 @@ def generate_patch_grid_from_normalized_LAFs(LAFs, w, h, PS):
     coef[0, 1, 2] = h
     if LAFs.is_cuda:
         coef = coef.cuda()
-    grid = F.affine_grid(LAFs * Variable(coef.expand(num_lafs, 2, 3)), torch.Size((num_lafs, 1, PS, PS)))
+    grid = F.affine_grid(LAFs * coef.expand(num_lafs, 2, 3), torch.Size((num_lafs, 1, PS, PS)))
     grid[:, :, :, 0] = 2.0 * grid[:, :, :, 0] / float(w) - 1.0
     grid[:, :, :, 1] = 2.0 * grid[:, :, :, 1] / float(h) - 1.0
     return grid
@@ -395,7 +403,6 @@ def extract_patches_from_pyramid_with_inv_index(scale_pyramid, pyr_inv_idxs, LAF
     patches = torch.zeros(LAFs.size(0), scale_pyramid[0][0].size(1), PS, PS)
     if LAFs.is_cuda:
         patches = patches.cuda()
-    patches = Variable(patches)
     if pyr_inv_idxs is not None:
         for i in range(len(scale_pyramid)):
             for j in range(len(scale_pyramid[i])):
@@ -433,7 +440,7 @@ def denormalizeLAFs(LAFs, w, h):
     coef[0, 1, 2] = h
     if LAFs.is_cuda:
         coef = coef.cuda()
-    return Variable(coef.expand(num_lafs, 2, 3)) * LAFs
+    return coef.expand(num_lafs, 2, 3) * LAFs
 
 
 def normalizeLAFs(LAFs, w, h):
@@ -446,14 +453,13 @@ def normalizeLAFs(LAFs, w, h):
     coef[0, 1, 2] = 1.0 / h
     if LAFs.is_cuda:
         coef = coef.cuda()
-    return Variable(coef.expand(num_lafs, 2, 3)) * LAFs
+    return coef.expand(num_lafs, 2, 3) * LAFs
 
 
 def sc_y_x2LAFs(sc_y_x):
     base_LAF = torch.eye(2).float().unsqueeze(0).expand(sc_y_x.size(0), 2, 2)
     if sc_y_x.is_cuda:
         base_LAF = base_LAF.cuda()
-    base_A = Variable(base_LAF, requires_grad=False)
     A = sc_y_x[:, :1].unsqueeze(1).expand_as(base_A) * base_A
     LAFs = torch.cat([A, torch.cat([sc_y_x[:, 2:].unsqueeze(-1), sc_y_x[:, 1:2].unsqueeze(-1)], dim=1)], dim=2)
 
@@ -491,4 +497,4 @@ def get_pyramid_and_level_index_for_LAFs(dLAFs, sigmas, pix_dists, PS):
         closest_imgs = closest_imgs.cuda()
         oct_idxs_full = oct_idxs_full.cuda()
         level_idxs_full = level_idxs_full.cuda()
-    return Variable(oct_idxs_full[closest_imgs]), Variable(level_idxs_full[closest_imgs])
+    return oct_idxs_full[closest_imgs], level_idxs_full[closest_imgs]

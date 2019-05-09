@@ -1,7 +1,6 @@
 """Utility methods for computing evaluating metrics. All methods assumes greater
 scores for better matches, and assumes label == 1 means match.
 """
-
 import numpy as np
 import sklearn.metrics
 

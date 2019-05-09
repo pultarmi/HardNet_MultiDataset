@@ -1,13 +1,57 @@
+#source: https://github.com/ducha-aiki/affnet/blob/master/HandCraftedModules.py
 import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 import numpy as np
-from Utils import GaussianBlur, CircularGaussKernel
 from LAF import abc2A, rectifyAffineTransformationUpIsUp, sc_y_x2LAFs
 from Utils import generate_2dgrid, generate_2dgrid, generate_3dgrid
 from Utils import zero_response_at_border
 import torchvision.transforms as transforms
+
+def CircularGaussKernel(kernlen=None, circ_zeros=False, sigma=None, norm=True):
+    assert (kernlen is not None) or sigma is not None
+    if kernlen is None:
+        kernlen = int(2.0 * 3.0 * sigma + 1.0)
+        if kernlen % 2 == 0:
+            kernlen = kernlen + 1
+        # halfSize = kernlen / 2
+    halfSize = kernlen / 2
+    r2 = float(halfSize * halfSize)
+    if sigma is None:
+        sigma2 = 0.9 * r2
+        # sigma = np.sqrt(sigma2)
+    else:
+        sigma2 = 2.0 * sigma * sigma
+    x = np.linspace(-halfSize, halfSize, kernlen)
+    xv, yv = np.meshgrid(x, x, sparse=False, indexing="xy")
+    distsq = (xv) ** 2 + (yv) ** 2
+    kernel = np.exp(-(distsq / (sigma2)))
+    if circ_zeros:
+        kernel *= (distsq <= r2).astype(np.float32)
+    if norm:
+        kernel /= np.sum(kernel)
+    return kernel
+
+
+class GaussianBlur(nn.Module):
+    def __init__(self, sigma=1.6):
+        super(GaussianBlur, self).__init__()
+        weight = self.calculate_weights(sigma)
+        self.register_buffer("buf", weight)
+        return
+
+    def calculate_weights(self, sigma):
+        kernel = CircularGaussKernel(sigma=sigma, circ_zeros=False)
+        h, w = kernel.shape
+        halfSize = float(h) / 2.0
+        self.pad = int(np.floor(halfSize))
+        return torch.from_numpy(kernel.astype(np.float32)).view(1, 1, h, w)
+
+    def forward(self, x):
+        w = Variable(self.buf)
+        if x.is_cuda:
+            w = w.cuda()
+        return F.conv2d(F.pad(x, (self.pad, self.pad, self.pad, self.pad), "replicate"), w, padding=0)
 
 
 class ScalePyramid(nn.Module):
@@ -16,7 +60,6 @@ class ScalePyramid(nn.Module):
         self.nLevels = nLevels
         self.init_sigma = init_sigma
         self.sigmaStep = 2 ** (1.0 / float(self.nLevels))
-        # print 'step',self.sigmaStep
         self.b = border
         self.minSize = 2 * self.b + 2 + 1
         return
@@ -91,7 +134,6 @@ class AffineShapeEstimator(nn.Module):
         self.gy = nn.Conv2d(1, 1, kernel_size=(3, 1), bias=False)
         self.gy.weight.data = torch.from_numpy(np.array([[[[-1], [0], [1]]]], dtype=np.float32))
         self.gk = torch.from_numpy(CircularGaussKernel(kernlen=self.PS, sigma=(self.PS / 2) / 3.0).astype(np.float32))
-        self.gk = Variable(self.gk, requires_grad=False)
         return
 
     def invSqrt(self, a, b, c):
@@ -156,7 +198,6 @@ class OrientationDetector(nn.Module):
         self.angular_smooth.weight.data = torch.from_numpy(np.array([[[0.33, 0.34, 0.33]]], dtype=np.float32))
 
         self.gk = 10.0 * torch.from_numpy(CircularGaussKernel(kernlen=self.PS).astype(np.float32))
-        self.gk = Variable(self.gk, requires_grad=False)
         return
 
     def get_bin_weight_kernel_size_and_stride(self, patch_size, num_spatial_bins):
@@ -248,11 +289,10 @@ class NMS3dAndComposeA(nn.Module):
         self.border = border
         self.mrSize = mrSize
         self.beta = 1.0
-        self.grid_ones = Variable(torch.ones(3, 3, 3, 3), requires_grad=False)
+        self.grid_ones = torch.ones(3, 3, 3, 3)
         self.NMS3d = NMS3d(kernel_size, threshold)
         if (w > 0) and (h > 0):
             self.spatial_grid = generate_2dgrid(h, w, False).view(1, h, w, 2).permute(3, 1, 2, 0)
-            self.spatial_grid = Variable(self.spatial_grid)
         else:
             self.spatial_grid = None
         return
@@ -291,10 +331,9 @@ class NMS3dAndComposeA(nn.Module):
             self.grid = generate_3dgrid(3, self.ks, self.ks)
         else:
             self.grid = generate_3dgrid(scales, self.ks, self.ks)
-        self.grid = Variable(self.grid.t().contiguous().view(3, 3, 3, 3), requires_grad=False)
+        self.grid = self.grid.t().contiguous().view(3, 3, 3, 3)
         if self.spatial_grid is None:
             self.spatial_grid = generate_2dgrid(low.size(2), low.size(3), False).view(1, low.size(2), low.size(3), 2).permute(3, 1, 2, 0)
-            self.spatial_grid = Variable(self.spatial_grid)
         if self.is_cuda:
             self.spatial_grid = self.spatial_grid.cuda()
             self.grid_ones = self.grid_ones.cuda()

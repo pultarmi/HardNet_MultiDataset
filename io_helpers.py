@@ -4,6 +4,14 @@ import __main__ as main
 from email.mime.text import MIMEText
 
 
+
+def line_prepender(filename, line):
+    with open(filename, "r+") as f:
+        content = f.read()
+        f.seek(0, 0)
+        f.write(line.rstrip("\r\n") + "\n" + content)
+    return
+
 def check_integrity(fpath, md5):
     if not os.path.isfile(fpath):
         return False
@@ -120,3 +128,27 @@ def send_email(recipient, ignore_host=""):
     s.login("clustersgpu@gmail.com", "4c46bc24732")
     s.sendmail("clustersgpu@gmail.com", recipient, msg.as_string())
     s.quit()
+
+
+class bcolors:
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    END = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
+    BLACK = "\033[1;30m"
+    RED = "\033[1;31m"
+    GREEN = "\033[1;32m"
+    YELLOW = "\033[1;33m"
+    BLUE = "\033[1;34m"
+    PURPLE = "\033[1;35m"
+    CYAN = "\033[1;36m"
+    WHITE = "\033[1;37m"
+
+    @staticmethod
+    def p(color, text):
+        print(color + text + bcolors.END)

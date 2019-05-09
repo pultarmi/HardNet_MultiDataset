@@ -4,18 +4,18 @@ import torch.nn as nn
 
 def distance_matrix_vector(anchor, positive):
     # Given batch of anchor descriptors and positive descriptors calculate distance matrix
-    d1_sq = torch.sum(anchor * anchor, dim=1).unsqueeze(-1)
-    d2_sq = torch.sum(positive * positive, dim=1).unsqueeze(-1)
-
+    d1_sq = torch.norm(anchor, p=2, dim=1,keepdim = True)
+    d2_sq = torch.norm(positive, p=2, dim=1,keepdim = True)
+    
     eps = 1e-6
-    return torch.sqrt((d1_sq.repeat(1, positive.size(0)) + torch.t(d2_sq.repeat(1, anchor.size(0))) - 2.0 * torch.bmm(anchor.unsqueeze(0), torch.t(positive).unsqueeze(0)).squeeze(0)) + eps)
+    return torch.sqrt(d1_sq.repeat(1, positive.size(0)) + torch.t(d2_sq.repeat(1, anchor.size(0))) - 2.0 * F.linear(anchor, positive) + eps)
 
 
 def distance_vectors_pairwise(anchor, positive, negative=None):
     # Given batch of anchor descriptors and positive descriptors calculate distance matrix
     eps = 1e-8
-    a_sq = torch.sum(anchor * anchor, dim=1)
-    p_sq = torch.sum(positive * positive, dim=1)
+    a_sq = torch.norm(anchor, p=2, dim=1,keepdim = True)
+    p_sq = torch.norm(positive, p=2, dim=1,keepdim = True)
     d_a_p = torch.sqrt(a_sq + p_sq - 2 * torch.sum(anchor * positive, dim=1) + eps)
     if negative is not None:
         n_sq = torch.sum(negative * negative, dim=1)
@@ -26,14 +26,18 @@ def distance_vectors_pairwise(anchor, positive, negative=None):
         return d_a_p
 
 
-def loss_HardNet(anchor, positive, anchor_swap=False, anchor_ave=False, margin=1.0, batch_reduce="min", loss_type="triplet_margin"):
+def loss_HardNet(anchor, positive, 
+                 margin=1.0,
+                 anchor_swap=False,
+                 batch_reduce="min", 
+                 loss_type="triplet_margin"):
     # HardNet margin loss - calculates loss based on distance matrix based on positive distance and closest negative distance.
     assert anchor.size() == positive.size(), "Input sizes between positive and negative must be equal."
     assert anchor.dim() == 2, "Inputd must be a 2D matrix."
     eps = 1e-8
     dist_matrix = distance_matrix_vector(anchor, positive) + eps
-    eye = torch.autograd.Variable(torch.eye(dist_matrix.size(1))).cuda()
-
+    eye = torch.eye(dist_matrix.size(1)).cuda()
+    
     # steps to filter out same patches that occur in distance matrix as negatives
     pos1 = torch.diag(dist_matrix)
 
@@ -47,19 +51,6 @@ def loss_HardNet(anchor, positive, anchor_swap=False, anchor_ave=False, margin=1
         if anchor_swap:
             min_neg2 = torch.min(dist_without_min_on_diag, 0)[0]
             min_neg = torch.min(min_neg, min_neg2)
-        if False:
-            dist_matrix_a = distance_matrix_vector(anchor, anchor) + eps
-            dist_matrix_p = distance_matrix_vector(positive, positive) + eps
-            dist_without_min_on_diag_a = dist_matrix_a + eye * 10
-            dist_without_min_on_diag_p = dist_matrix_p + eye * 10
-            min_neg_a = torch.min(dist_without_min_on_diag_a, 1)[0]
-            min_neg_p = torch.t(torch.min(dist_without_min_on_diag_p, 0)[0])
-            min_neg_3 = torch.min(min_neg_p, min_neg_a)
-            min_neg = torch.min(min_neg, min_neg_3)
-            print(min_neg_a)
-            print(min_neg_p)
-            print(min_neg_3)
-            print(min_neg)
         min_neg = min_neg
         pos = pos1
     elif batch_reduce == "average":

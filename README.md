@@ -9,7 +9,7 @@ HPatches view split pt file was generated via the script HPatchesDatasetCreator.
 
 **Example:**
 ```
-python -utt HardNetMultipleDatasets.py --id=1 --weight-function=Hessian --epochs=10 --name=example --batch-size=3072 2>&1
+python -utt HardNetMultipleDatasets.py --id=1 --epochs=10 --name=example --batch-size=3072 2>&1
 ```
 
 **Please cite us if you use this code:**

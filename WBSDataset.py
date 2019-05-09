@@ -1,59 +1,32 @@
-import os, sys, random, glob, errno, json, torch, math, gc, torchvision, multiprocessing, cv2, itertools
+import os, sys, random, glob, errno, json, torch, math, gc, torchvision, multiprocessing, itertools
 from os import path
+import torch.nn as nn
 import numpy as np
 from PIL import Image
-from pprint import pprint
 import torch.utils.data as data
-from joblib import Parallel, delayed
-from utils import download_url, check_integrity, send_email
+from io_helpers import send_email
 import pathos.pools as pp
 import torchvision.transforms as tforms
 from copy import deepcopy
 from tqdm import tqdm
 from random import randint
-import torch.nn as nn
+from LAF import LAF2A
+from HandCraftedModules import NMS2d
 
+try:
+    import cv2
+    CV2_HERE = True
+except:
+    CV2_HERE = False
 
 def get_img_set_num(dir_name):
     img_set = os.listdir(dir_name)
     return len(img_set)
 
 
-def LAF2A(laf, h, w, PS=32):
-    min_size = float(min(h, w))
-    A = deepcopy(laf)
-    A[0, :2] = 2.0 * laf[0, :2] / float(PS)
-    A[1, :2] = 2.0 * laf[1, :2] / float(PS)
-    s = float(PS) * np.sqrt(np.abs(A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0]))
-    A[0, 2] = A[0, 2] - s / 2.0
-    A[1, 2] = A[1, 2] - s / 2.0
-    return A
-
 
 def rotate(l, n):
     return l[n:] + l[:n]
-
-
-class NMS2d(nn.Module):
-    def __init__(self, kernel_size=17, threshold=0):  # kernel_size = 3
-        super(NMS2d, self).__init__()
-        self.MP = nn.MaxPool2d(kernel_size, stride=1, return_indices=False, padding=kernel_size / 2)
-        self.eps = 1e-10
-        self.th = threshold
-        return
-
-    def forward(self, x):
-        # local_maxima = self.MP(x)
-        # if x!=self.MP(x):
-        #     return x
-        # else:
-        #     return torch.Tensor(0)
-
-        if self.th > self.eps:
-            return x * (x > self.th).float() * ((x + self.eps - self.MP(x)) > 0).float()
-        else:
-            # return ((x - self.MP(x) + self.eps) > 0).float() * x
-            return (x == self.MP(x)).float() * x
 
 
 ### example of correct weight function
@@ -785,13 +758,14 @@ class WBSDataset(data.Dataset):
         return LAFs, scales
 
     def draw_centers(self, img, centers, dir_name, dir_out, scales):
-        # pil_image = Image.open('Image.jpg').convert('RGB')
-        open_cv_image = np.array(img.convert("RGB"))
-        # Convert RGB to BGR
-        open_cv_image = open_cv_image[:, :, ::-1].copy()
-        for ct, sc in zip(centers, scales):
-            open_cv_image = cv2.circle(open_cv_image, (int(ct[0]), int(ct[1])), 20, (0, 0, 255))
-        cv2.imwrite(os.path.join(dir_out, dir_name + ".png"), open_cv_image)
+        if CV2_HERE:
+            # pil_image = Image.open('Image.jpg').convert('RGB')
+            open_cv_image = np.array(img.convert("RGB"))
+            # Convert RGB to BGR
+            open_cv_image = open_cv_image[:, :, ::-1].copy()
+            for ct, sc in zip(centers, scales):
+                open_cv_image = cv2.circle(open_cv_image, (int(ct[0]), int(ct[1])), 20, (0, 0, 255))
+            cv2.imwrite(os.path.join(dir_out, dir_name + ".png"), open_cv_image)
         return
 
     def generate_LAFs_and_patches_from_dir(self, dir_name, nLAFs):

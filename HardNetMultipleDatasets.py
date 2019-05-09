@@ -1,4 +1,3 @@
-#!/usr/bin/python2 -utt
 # -*- coding: utf-8 -*-
 """
 This is HardNet local patch descriptor. The training code is based on PyTorch TFeat implementation
@@ -22,55 +21,54 @@ If you use this code, please cite:
 }
 """
 from __future__ import division, print_function
-import torch.nn.init
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 from Utils import *
 from HandCraftedModules import get_WF_from_string
-import torch.nn as nn
-import torch.utils.data as data
 from os import path
-from utils import send_email, get_last_checkpoint
+from io_helpers import send_email, get_last_checkpoint
+import argparse, tqdm, PIL, cv2, os, pickle
+from Dataset import TripletPhotoTour
+from Losses import *
+from Dataset import *
+from architectures import *
+from Learning import *
+from EvalMetrics import *
 
 
 parser = argparse.ArgumentParser(description="PyTorch HardNet")
 parser.add_argument("--model-dir", default="models/", help="folder to output model checkpoints")
-parser.add_argument("--name", default="", help="Other options: notredame, yosemite")
+
+parser.add_argument("--name", default="", help="Experiment name prefix")
+
 parser.add_argument("--loss", default="triplet_margin", help="Other options: softmax, contrastive")
 parser.add_argument("--batch-reduce", default="min", help="Other options: average, random, random_global, L2Net")
-parser.add_argument("--anchorave", type=str2bool, default=False, help="anchorave")
-parser.add_argument("--imageSize", type=int, default=32, help="the height / width of the input image to network")
 parser.add_argument("--resume", default="", type=str, metavar="PATH", help="path to latest checkpoint (default: none)")
 parser.add_argument("--start-epoch", default=0, type=int, metavar="N", help="manual epoch number (useful on restarts)")
 parser.add_argument("--epochs", type=int, default=10, metavar="E", help="number of epochs to train (default: 10)")
-parser.add_argument("--anchorswap", type=bool, default=True, help="turns on anchor swap")
 parser.add_argument("--batch-size", type=int, default=1024, metavar="BS", help="input batch size for training (default: 1024)")
 parser.add_argument("--test-batch-size", type=int, default=128, metavar="BST", help="input batch size for testing (default: 1024)")
-parser.add_argument("--n-triplets", type=int, default=5000000, metavar="N", help="how many triplets will generate from the dataset")
+parser.add_argument("--n-triplets", type=int, default=5000000, metavar="N", help="how many tuples will generate from the dataset")
 parser.add_argument("--margin", type=float, default=1.0, metavar="MARGIN", help="the margin value for the triplet loss function (default: 1.0")
 parser.add_argument("--lr", type=float, default=20.0, metavar="LR", help="learning rate (default: 10.0)")
 parser.add_argument("--fliprot", type=str2bool, default=True, help="turns on flip and 90deg rotation augmentation")
 parser.add_argument("--wd", default=1e-4, type=float, metavar="W", help="weight decay (default: 1e-4)")
 parser.add_argument("--optimizer", default="sgd", type=str, metavar="OPT", help="The optimizer to use (default: SGD)")
 parser.add_argument("--n-patch-sets", type=int, default=30000, help="How many patch sets to generate. 300k is ~ 6000 per image seq for HPatches")
-parser.add_argument("--id", type=int, default=0, help="id")
+parser.add_argument("--id", type=int, default=0, help="experiment id")
 
 parser.add_argument("--seed", type=int, default=0, metavar="S", help="random seed (default: 0)")
 parser.add_argument("--log-interval", type=int, default=1, metavar="LI", help="how many batches to wait before logging training status")
-parser.add_argument("--regen-each-iter", type=str2bool, default=False, help="Regenerate keypoints each iteration, default True")
+# parser.add_argument("--regen-each-iter", type=str2bool, default=False, help="Regenerate keypoints each iteration, default True")
 
-parser.add_argument("--mark-patches-dir", type=str, default=None, help="you can specify where masks are saved")
+# parser.add_argument("--mark-patches-dir", type=str, default=None, help="you can specify where masks are saved")
 parser.add_argument("--cams-in-batch", type=int, default=0, help="you can specify where masks are saved")
 
 parser.add_argument("--patch-gen", type=str, default="oneRes", help="options: oneImg, sumImg, watchGood")
-parser.add_argument("--test", default=False, action="store_true")
-parser.add_argument("--PS", default=False, action="store_true")
+parser.add_argument("--PS", default=False, action="store_true", help="options: use HardNetPS model")
 parser.add_argument("--debug", default=False, action="store_true", help="verbal")
 
-parser.add_argument("--spx", type=float, default=0, help="sx")
-parser.add_argument("--spy", type=float, default=0, help="sy")
-
-parser.add_argument("--older", default=False, action="store_true", help="verbal")
+parser.add_argument("--older", type=str2bool, default=False, help="For use with old torchvision")
 
 parser.add_argument(
     "--weight-function",
@@ -84,23 +82,16 @@ txt = []
 txt += ["PS:" + str(args.n_patch_sets) + "PP"]
 txt += ["WF:" + args.weight_function]
 txt += ["PG:" + args.patch_gen]
-# txt += ['masks:'+str(int(args.masks_dir is not None))]
-txt += ["spx:" + str(args.spx)]
-txt += ["spy:" + str(args.spy)]
 split_name = "_".join(txt)
 
 txt = []
-# txt += [path.basename(args.tower_dataset).lower()]
 txt += ["id:" + str(args.id)]
 txt += ["TrS:" + args.name]
-# txt += ['TrS:'+args.training_set]
 txt += [split_name]
 txt += [args.batch_reduce]
 txt += ["tps:" + str(args.n_triplets)]
 txt += ["camsB:" + str(args.cams_in_batch)]
 txt += ["ep:" + str(args.epochs)]
-if args.anchorswap:
-    txt += ["as"]
 save_name = "_".join([str(c) for c in txt])
 
 
@@ -109,9 +100,15 @@ torch.cuda.manual_seed_all(args.seed)
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
+
+# resize image to size 32x32
+cv2_scale = lambda x: cv2.resize(x, dsize=(32, 32), interpolation=cv2.INTER_LINEAR)
+# reshape image
+np_reshape32 = lambda x: np.reshape(x, (32, 32, 1))
 np_reshape64 = lambda x: np.reshape(x, (64, 64, 1))
+
+# np_reshape64 = lambda x: np.reshape(x, (64, 64, 1))
 transform_test = transforms.Compose([
-            #transforms.Lambda(np_reshape64),
             transforms.ToPILImage(),
             transforms.Resize(32),
             transforms.ToTensor()])
@@ -119,7 +116,7 @@ transform_test = transforms.Compose([
 transform_train_1 = transforms.Compose(
         [
             transforms.ToPILImage(),
-            transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BILINEAR),
+            transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BICUBIC),
             transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
             transforms.ToTensor(),
         ]
@@ -132,7 +129,7 @@ default_transform = {"default": transform_train_1}
 transform_AMOS = transforms.Compose(
     [
         transforms.ToPILImage(),
-        transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BILINEAR),
+        transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BICUBIC),
         transforms.CenterCrop(64),
         transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
         transforms.ToTensor(),
@@ -159,7 +156,6 @@ if args.older: # older torchvision does not run transforms above
     default_transform={'default':transform_test}
     # easy_transform={'e1':t, 'e2':t, 'e3':t, 'default':transform}
     transform_train_1 = default_transform
-
     transform_AMOS = transforms.Compose([transforms.ToPILImage(),
                                          transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=PIL.Image.BICUBIC),
                                          transforms.CenterCrop(64),
@@ -173,7 +169,8 @@ def get_test_loaders():
         {
             "name": name,
             "dataloader": torch.utils.data.DataLoader(
-                TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets=1000, root=path.join("Datasets"), name=name, download=True, transform=transform_test),
+                TripletPhotoTour(train=False, batch_size=args.test_batch_size, n_triplets=1000,
+                                 root=path.join("Datasets"), name=name, download=True, transform=transform_test),
                 batch_size=args.test_batch_size,
                 shuffle=False,
                 **kwargs
@@ -185,6 +182,44 @@ def get_test_loaders():
     return test_loaders
 
 
+
+def test(test_loader, model, epoch, logger_test_name, args):
+    model.eval()
+    labels, distances = [], []
+    mean_losses = []
+    pbar = tqdm(enumerate(test_loader))
+    for batch_idx, (data_a, data_p, label) in pbar:
+        data_a = data_a.cuda()
+        data_p = data_p.cuda()
+        out_a =  model(data_a)
+        out_p = model(data_p)
+        dists = torch.sqrt(torch.sum((out_a - out_p) ** 2, 1))  # euclidean distance
+        distances.append(dists.data.cpu().numpy().reshape(-1, 1))
+        labels.append(label.data.cpu().numpy().reshape(-1, 1))
+        if batch_idx % args.log_interval == 0:
+            pbar.set_description(logger_test_name + " Test Epoch: {} [{}/{} ({:.0f}%)]".format(epoch,
+                                                                                               batch_idx * len(data_a), 
+                                                                                               len(test_loader.dataset),
+                                                                                               100.0 * batch_idx / len(test_loader)))
+    num_tests = test_loader.dataset.matches.size(0)
+    labels = np.vstack(labels).reshape(num_tests)
+    distances = np.vstack(distances).reshape(num_tests)
+    fpr95 = ErrorRateAt95Recall(labels, 1.0 / (distances + 1e-8))
+    print("\33[91mTest set: FPR95: {:.8f}\33[0m".format(fpr95))
+    print("\33[91mTest set: AP: {:.8f}\33[0m".format(AP(labels, distances)))
+    if args.test:
+        curve = prec_recall_curve(labels, distances)
+        curve_path = "prec_recall_curves/curve_" + logger_test_name + ".pickle"
+        pickle.dump(curve, open(curve_path, "wb"))
+        print("saved " + curve_path)
+        # p_out = 'PR_curve_intra_{}.pickle'.format(t)
+        # pickle.dump(PR_curve, open(p_out, 'wb'))
+        # print('saved {}'.format(p_out))
+        auc = sklearn.metrics.auc(curve[1][::-1], curve[0][::-1])
+        print("auc = {}".format(auc))
+        print("")
+        
+
 def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
     model.train()
     train_loader.prepare_epoch()
@@ -195,25 +230,33 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         data_p = data_p.cuda()
         out_a = model(data_a)
         out_p = model(data_p)
-        loss = loss_HardNet(out_a, out_p, margin=args.margin, anchor_swap=args.anchorswap, anchor_ave=False, batch_reduce=args.batch_reduce, loss_type=args.loss)
+        loss = loss_HardNet(out_a, out_p,
+                            margin=args.margin,
+                            anchor_swap=args.anchorswap, 
+                            batch_reduce=args.batch_reduce, 
+                            loss_type=args.loss)
         loss = loss.mean()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        pom = adjust_learning_rate(optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs)
-        if pom < 0:  # just to be sure - never ascend
+        success = adjust_learning_rate(optimizer, args.lr, args.batch_size, args.n_triplets, args.epochs)
+        if success < 0:  # just to be sure - never ascend
             break
         if batch_idx % args.log_interval == 0:
             pbar.set_description(
-                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(epoch, batch_idx * len(data_a), len(train_loader) * len(data_a), 100.0 * batch_idx / len(train_loader), loss.item())
+                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(epoch, 
+                                                                         batch_idx * len(data_a), 
+                                                                         len(train_loader) * len(data_a), 
+                                                                         100.0 * batch_idx / len(train_loader),
+                                                                         loss.item())
             )
 
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
-    # save_path = '{}{}/checkpoint_{}.pth'.format(args.model_dir, save_name, epoch)
     save_path = os.path.join(args.model_dir, save_name, "checkpoint_{}.pth".format(epoch))
     torch.save({"epoch": epoch + 1, "state_dict": model.state_dict()}, save_path)
     print("saving to: {}".format(save_path))
     print_lr(optimizer)
+    return
 
 
 def print_lr(optimizer):
@@ -256,9 +299,9 @@ def main(train_loader, test_loaders, model):
                     model.load_state_dict(checkpoint["state_dict"])
                 except:
                     print("loading subset of weights")
-                    pom = model.state_dict()
-                    pom.update(checkpoint)
-                    model.load_state_dict(pom)
+                    aux = model.state_dict()
+                    aux.update(checkpoint)
+                    model.load_state_dict(aux)
                 try:
                     optimizer1.load_state_dict(checkpoint["optimizer"])
                 except:
@@ -270,7 +313,7 @@ def main(train_loader, test_loaders, model):
     start = args.start_epoch
     end = start + args.epochs
     for epoch in range(start, end):
-        train(train_loader, model, optimizer1, epoch, False, WBSLoader=None)
+        train(train_loader, model, optimizer1, epoch)
         for test_loader in test_loaders:
             test(test_loader["dataloader"], model, epoch, test_loader["name"], args)
 

@@ -1,10 +1,10 @@
 import os
 import numpy as np
-import cv2
 import time
 from tqdm import tqdm
 import torch
-from torch.autograd import Variable
+from skimage.io import imread
+import cv2
 
 
 def w1bs_extract_descs_and_save(input_img_fname, model, desc_name, mean_img=0.443728476019, std_img=0.20197947209, cuda=False, out_dir=None):
@@ -18,7 +18,7 @@ def w1bs_extract_descs_and_save(input_img_fname, model, desc_name, mean_img=0.44
     if len(out_dir) > 0:
         if not os.path.isdir(out_dir):
             os.makedirs(out_dir)
-    image = cv2.imread(input_img_fname, 0)
+    image = imread(input_img_fname, 0)
     h, w = image.shape
     # print(h,w)
     n_patches = int(h / w)
@@ -46,15 +46,14 @@ def w1bs_extract_descs_and_save(input_img_fname, model, desc_name, mean_img=0.44
         else:
             end = (batch_idx + 1) * bs
         data_a = patches_for_net[batch_idx * bs : end, :, :, :].astype(np.float32)
-        data_a = torch.from_numpy(data_a)
-        if cuda:
-            data_a = data_a.cuda()
-        data_a = Variable(data_a, volatile=True)
-        out_a = model(data_a)
-        outs.append(out_a.data.cpu().numpy().reshape(-1, 128))
+        with torch.no_grad():
+            data_a = torch.from_numpy(data_a)
+            if cuda:
+                data_a = data_a.cuda()
+                out_a = model(data_a)
+            outs.append(out_a.data.cpu().numpy().reshape(-1, 128))
     ###
     res_desc = np.concatenate(outs)
-    print(res_desc.shape, n_patches)
     res_desc = np.reshape(res_desc, (n_patches, -1))
     np.savetxt(out_fname, res_desc, delimiter=" ", fmt="%10.7f")
     return
