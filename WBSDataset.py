@@ -67,7 +67,7 @@ class WBSDataset(data.Dataset):
         weight_function=None,
         grayscale=True,
         max_tilt=1.0,
-        group_id=[0],
+        group_ids=[0],
         border=5,
         download=False,
         overwrite=False,
@@ -83,26 +83,28 @@ class WBSDataset(data.Dataset):
         spy=0,
         save_losses=False,
         NMS=False,
+        label_offset=0,
     ):
-        self.tpl = tforms.ToPILImage()
-        self.ttsr = tforms.ToTensor()
-        self.img_ext = set(["jpg", "jpeg", "png", "ppm", "bmp"])
-        self.root = os.path.expanduser(root)
+        self.tpl            = tforms.ToPILImage()
+        self.ttsr           = tforms.ToTensor()
+        self.img_ext        = set(["jpg", "jpeg", "png", "ppm", "bmp"])
+        self.root           = os.path.expanduser(root)
         self.path_to_train_test_split = path_to_train_test_split
-        self.split_name = split_name
-        self.transform = transform
-        self.n_patch_sets = n_patch_sets
-        self.n_positives = n_positives
-        self.patch_size = patch_size
-        self.weight_function = weight_function
-        self.grayscale = grayscale
-        self.max_tilt = max_tilt
-        self.download = download
-        self.border = border
-        self.batch_size = batch_size
-        self.n_tuples = n_tuples
-        self.fliprot = fliprot
-        self.group_id = group_id
+        self.split_name     = split_name
+        self.transform      = transform
+        self.n_patch_sets   = n_patch_sets
+        self.n_positives    = n_positives
+        self.patch_size     = patch_size
+        self.weight_function= weight_function
+        self.grayscale      = grayscale
+        self.max_tilt       = max_tilt
+        self.download       = download
+        self.border         = border
+        self.batch_size     = batch_size
+        self.n_tuples       = n_tuples
+        self.fliprot        = fliprot
+        self.group_ids       = group_ids
+        self.label_offset   = label_offset
 
         self.NMS = NMS
 
@@ -855,6 +857,9 @@ class WBSDataset(data.Dataset):
         del patch_tower
         return aaa, torch.from_numpy(LAFs).float(), idxs_good if self.patch_gen == "watchGood" else None
 
+    def max_label(self):
+        return np.max(self.cam_idx)
+
     def process_dataset(self, overwrite=False):
         if self._check_datafile_exists() and not overwrite:
             print("# Found cached data {}".format(self.data_file))
@@ -863,6 +868,8 @@ class WBSDataset(data.Dataset):
             else:
                 self.patch_sets, self.all_lafs, self.cam_idxs = torch.load(self.data_file)
             return
+
+        self.cam_idx += self.label_offset
 
         print("# Not found: {}".format(self.data_file))
 

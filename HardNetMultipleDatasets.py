@@ -34,11 +34,11 @@ from Dataset import *
 from architectures import *
 from Learning import *
 from EvalMetrics import *
+from Losses import loss_HardNetMulti
 
 
 parser = argparse.ArgumentParser(description="PyTorch HardNet")
 parser.add_argument("--model-dir", default="models/", help="folder to output model checkpoints")
-
 parser.add_argument("--name", default="", help="Experiment name prefix")
 
 parser.add_argument("--loss", default="triplet_margin", help="Other options: softmax, contrastive")
@@ -59,12 +59,10 @@ parser.add_argument("--id", type=int, default=0, help="experiment id")
 
 parser.add_argument("--seed", type=int, default=0, metavar="S", help="random seed (default: 0)")
 parser.add_argument("--log-interval", type=int, default=1, metavar="LI", help="how many batches to wait before logging training status")
-# parser.add_argument("--regen-each-iter", type=str2bool, default=False, help="Regenerate keypoints each iteration, default True")
 
-# parser.add_argument("--mark-patches-dir", type=str, default=None, help="you can specify where masks are saved")
-parser.add_argument("--cams-in-batch", type=int, default=0, help="you can specify where masks are saved")
+parser.add_argument("--cams-in-batch", type=int, default=0, help="how many cams are source ones for a batch in AMOS")
 
-parser.add_argument("--patch-gen", type=str, default="oneRes", help="options: oneImg, sumImg, watchGood")
+parser.add_argument("--patch-gen", type=str, default="oneRes", help="options: oneImg, sumImg")
 parser.add_argument("--PS", default=False, action="store_true", help="options: use HardNetPS model")
 parser.add_argument("--debug", default=False, action="store_true", help="verbal")
 
@@ -207,17 +205,6 @@ def test(test_loader, model, epoch, logger_test_name, args):
     fpr95 = ErrorRateAt95Recall(labels, 1.0 / (distances + 1e-8))
     print("\33[91mTest set: FPR95: {:.8f}\33[0m".format(fpr95))
     print("\33[91mTest set: AP: {:.8f}\33[0m".format(AP(labels, distances)))
-    if args.test:
-        curve = prec_recall_curve(labels, distances)
-        curve_path = "prec_recall_curves/curve_" + logger_test_name + ".pickle"
-        pickle.dump(curve, open(curve_path, "wb"))
-        print("saved " + curve_path)
-        # p_out = 'PR_curve_intra_{}.pickle'.format(t)
-        # pickle.dump(PR_curve, open(p_out, 'wb'))
-        # print('saved {}'.format(p_out))
-        auc = sklearn.metrics.auc(curve[1][::-1], curve[0][::-1])
-        print("auc = {}".format(auc))
-        print("")
         
 
 def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
@@ -230,9 +217,9 @@ def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=
         data_p = data_p.cuda()
         out_a = model(data_a)
         out_p = model(data_p)
-        loss = loss_HardNet(out_a, out_p,
+        loss = loss_HardNetMulti(out_a, out_p,
                             margin=args.margin,
-                            anchor_swap=args.anchorswap, 
+                            anchor_swap=True,
                             batch_reduce=args.batch_reduce, 
                             loss_type=args.loss)
         loss = loss.mean()
@@ -273,18 +260,13 @@ def main(train_loader, test_loaders, model):
         p1 = args.resume
         p2 = os.path.join(args.model_dir, args.resume)
         path_resume = None
-        if os.path.isfile(p1):
-            # print('=> no checkpoint found at {}'.format(os.path.join(os.getcwd(), args.resume)))
-            # path_resume = os.path.join(args.model_dir, args.resume)
+        if os.path.isfile(p1): # try the path as absolute filepath first
             path_resume = p1
-        elif os.path.isfile(p2):
-            # print('=> no checkpoint found at {}'.format(os.path.join(os.getcwd(), args.resume)))
-            # path_resume = os.path.join(args.model_dir, args.resume)
+        elif os.path.isfile(p2): # then try it as filepath in model_dir
             path_resume = p2
-        elif os.path.exists(p2):
+        elif os.path.exists(p2): # finally try it as dir name in model_dir (picks latest checkpoint)
             print("searching dir")
             path_resume = os.path.join(p2, get_last_checkpoint(p2))
-            # print('path exists, last checkpoint found: {}'.format(path_resume))
         if path_resume is not None:
             print("=> loading checkpoint {}".format(path_resume))
             if args.PS:
@@ -308,7 +290,6 @@ def main(train_loader, test_loaders, model):
                     print("optimizer not loaded")
         else:
             print("=> no checkpoint found")
-            # print('=> no checkpoint found at {}'.format(path_resume))
 
     start = args.start_epoch
     end = start + args.epochs
@@ -321,20 +302,17 @@ def main(train_loader, test_loaders, model):
 if __name__ == "__main__":
     tst = get_test_loaders()
     DSs = []
-    DSs += [One_DS(Args_Brown("Datasets/liberty.pt", 2, True, default_transform), group_id=[0])]
-    DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', 2, True, default_transform), group_id=[1])]
-    DSs += [One_DS(Args_Brown('Datasets/notredame.pt', 2, True, default_transform), group_id=[2])]
-    DSs += [One_DS(Args_Brown('Datasets/notredame_harris.pt', 2, True, default_transform), group_id=[3])]
-    DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', 2, True, default_transform), group_id=[4])]
-    DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', 2, True, default_transform), group_id=[5])]
-    DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', 2, True, default_transform), group_id=list(range(6,12)))]
-    DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', 1, split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
-                            args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks'), group_id=list(range(12)))]
+    DSs += [One_DS(Args_Brown("Datasets/liberty.pt", True, default_transform))]
+    DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', True, default_transform))]
+    DSs += [One_DS(Args_Brown('Datasets/notredame.pt', True, default_transform))]
+    DSs += [One_DS(Args_Brown('Datasets/notredame_harris.pt', True, default_transform))]
+    DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', True, default_transform))]
+    DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', True, default_transform))]
+    DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', True, default_transform))]
+    DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
+                           args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks'))]
 
-    # group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
-    # then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
-    # each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by sum of relative sizes)
-    wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size)
+    wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size, frequencies=[1,1,1,1,1,1,6,6])
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
     with open(os.path.join(args.model_dir, save_name, "setup.txt"), "w") as f:
         for d in wrapper.datasets:

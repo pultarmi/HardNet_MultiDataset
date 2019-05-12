@@ -1,10 +1,12 @@
 import numpy as np
-import torch, random, tqdm
+import torch, random
 import torchvision.datasets as dset
 from io_helpers import *
 from copy import *
 import torch.utils.data as data
 from enum import Enum
+from tqdm import tqdm
+from WBSDataset import WBSDataset
 
 
 
@@ -145,10 +147,11 @@ class TripletPhotoTour(dset.PhotoTour):
 
 
 class TotalDatasetsLoader(data.Dataset):
-    def __init__(self, dataset_path, train=True, batch_size=None, fliprot=False, transform_dict=None, group_id=[0], *arg, **kw):
+    def __init__(self, dataset_path, train=True, batch_size=None, fliprot=False, transform_dict=None, group_ids=[0], label_offset=0, *arg, **kw):
         super(TotalDatasetsLoader, self).__init__()
         dataset = torch.load(dataset_path)
         data, labels = dataset[0], dataset[1]
+        labels += label_offset
         try:
             self.all_txts = dataset[-1]  # 'e1, e2, ...'
             if type(self.all_txts) != type(["some_text"]):
@@ -156,17 +159,21 @@ class TotalDatasetsLoader(data.Dataset):
         except:
             self.all_txts = [""] * len(labels)
 
-        self.split_idxs = [-1] + [torch.max(labels).item()]
-
-        intervals = [(self.split_idxs[i], self.split_idxs[i + 1]) for i in range(len(self.split_idxs) - 1)]
-        self.range_intervals = [list(range(c[0] + 1, c[1] + 1)) for c in intervals]
+        # self.split_idxs = [-1] + [torch.max(labels).item()]
+        # intervals = [(self.split_idxs[i], self.split_idxs[i + 1]) for i in range(len(self.split_idxs) - 1)]
+        # self.range_intervals = [list(range(c[0] + 1, c[1] + 1)) for c in intervals]
+        self.interval = list(range(label_offset, torch.max(labels).item()))
 
         self.data, self.labels = data, labels
         self.transform_dict = transform_dict
         self.train = train
         self.batch_size = batch_size
         self.fliprot = fliprot
-        self.group_id = group_id
+        self.group_ids = group_ids
+        self.label_offset = label_offset
+
+    def max_label(self):
+        return torch.max(self.labels).item()
 
     def generate_tuples(self):
         def create_indices():
@@ -183,7 +190,8 @@ class TotalDatasetsLoader(data.Dataset):
         self.tuples = []
         for batch_size in tqdm(self.bs_seq, desc='generating tuples'):
             # print(batch_size)
-            cs = random.sample(self.range_intervals[0], batch_size) # no replace
+            # cs = random.sample(self.range_intervals[0], batch_size) # no replace
+            cs = random.sample(self.interval, batch_size) # no replace
             for c1 in cs:
                 if len(indices[c1]) == 2:
                     n1, n2 = 0, 1
@@ -222,15 +230,16 @@ class FORMAT(Enum):
 
 
 class Args_Brown:
-    def __init__(self, path: str, relative_batch_size, fliprot: bool, transform_dict: dict):
+    def __init__(self, path: str, fliprot: bool, transform_dict: dict):
+        relative_batch_size = 1 # relative_batch_size not effective ATM
         self.path = path
         self.batch_size = relative_batch_size
         self.fliprot = fliprot
         self.transform_dict = transform_dict
 
-
 class Args_AMOS:
-    def __init__(self, tower_dataset, relative_batch_size, split_name, n_patch_sets, weight_function, fliprot, transform, patch_gen, cams_in_batch, masks_dir=None):
+    def __init__(self, tower_dataset, split_name, n_patch_sets, weight_function, fliprot, transform, patch_gen, cams_in_batch, masks_dir=None):
+        relative_batch_size = 1 # relative_batch_size not effective ATM
         self.tower_dataset = tower_dataset
         self.split_name = split_name
         self.n_patch_sets = n_patch_sets
@@ -244,7 +253,8 @@ class Args_AMOS:
 
 
 class One_DS:
-    def __init__(self, args, group_id: [int] = [0]):
+    def __init__(self, args):
+        group_ids = [0] # group_ids not used ATM
         if isinstance(args, Args_Brown):
             self.__dict__ = args.__dict__.copy()
             self.format = FORMAT.Brown
@@ -253,15 +263,21 @@ class One_DS:
             self.format = FORMAT.AMOS
         else:
             raise ("incorrect args class")
-        self.group_id = group_id
+        self.group_ids = group_ids
         bcolors.p(bcolors.YELLOW, str(self.__dict__))
+
+# group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
+# then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
+# each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by sum of relative sizes)
 
 
 class DS_wrapper:
     def prepare_epoch(self, gen_tuples=True):
         kwargs = {"num_workers": max(1, 8//len(self.datasets)), "pin_memory": True}
         self.loaders = []
+        label_offset = 0
         for c in self.datasets:
+            # print(label_offset)
             if c.format == FORMAT.Brown:
                 self.loaders += [
                     TotalDatasetsLoader(
@@ -272,7 +288,8 @@ class DS_wrapper:
                         fliprot=c.fliprot,
                         n_tuples=self.n_tuples,
                         transform_dict=c.transform_dict,
-                        group_id=c.group_id,
+                        group_ids=c.group_ids,
+                        label_offset=label_offset,
                     )
                 ]
             elif c.format == FORMAT.AMOS:
@@ -285,23 +302,25 @@ class DS_wrapper:
                         weight_function=c.weight_function,
                         grayscale=True,
                         download=False,
-                        group_id=c.group_id,
+                        group_ids=c.group_ids,
                         n_tuples=self.n_tuples,
                         batch_size=c.batch_size,
                         fliprot=c.fliprot,
                         transform=c.transform,
                         cams_in_batch=c.cams_in_batch,
                         patch_gen=c.patch_gen,
+                        label_offset=label_offset,
                     )
                 ]
             else:
                 raise ("invalid DS format")
+            label_offset = self.loaders[-1].max_label()
 
         for loader in self.loaders:
             loader.bs = {}
 
-        for gid in self.group_ids:
-            cur_loaders = [c for c in self.loaders if gid in c.group_id]
+        for gid in self.all_group_ids:
+            cur_loaders = [c for c in self.loaders if gid in c.group_ids]
             sum_of_sizes = sum([c.batch_size for c in cur_loaders])
             for loader in cur_loaders:
                 loader.bs[gid] = int((loader.batch_size / sum_of_sizes) * self.batch_size)
@@ -309,29 +328,35 @@ class DS_wrapper:
         if not gen_tuples:
             return
 
-        self.gid_seq = np.random.choice(self.group_ids, size=self.n_iters()) # prepare sequence of groups for the epoch
+        self.gid_seq = np.random.choice(self.all_group_ids, size=self.n_iters(), p=self.frequencies) # prepare sequence of groups for the epoch
         # print(self.gid_seq)
         for loader in self.loaders: # in each loader
             loader.bs_seq = [loader.bs[c] for c in self.gid_seq if c in loader.bs.keys()]
             loader.generate_tuples()
 
         self.gid_to_iters = {}
-        for gid in self.group_ids:
-            cur_loaders = [c for c in self.loaders if gid in c.group_id]
+        for gid in self.all_group_ids:
+            cur_loaders = [c for c in self.loaders if gid in c.group_ids]
             self.gid_to_iters[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.bs[gid], shuffle=False, **kwargs)) for c in cur_loaders]
 
-    def __init__(self, datasets: [One_DS], n_tuples, batch_size, fliprot=False):
+    def __init__(self, datasets: [One_DS], n_tuples, batch_size, frequencies, fliprot=False):
         self.n_tuples = n_tuples
-        self.group_ids = list(set().union(*[c.group_id for c in datasets]))
         self.gid_to_DS = {}
         self.b_size = batch_size
         self.datasets = datasets
         self.fliprot = fliprot
         self.batch_size = batch_size
-        self.prepare_epoch(gen_tuples=False)
 
-        for gid in self.group_ids:
-            print("group {} b_sizes: {}".format(gid, [z.bs[gid] for z in [c for c in self.loaders if gid in c.group_id]]))
+        if not len(frequencies)==len(self.datasets):
+            raise Exception('must be len(frequencies)==len(datasets), that is one relative frequency for each DS')
+        self.frequencies = np.array(frequencies) / np.sum(np.array(frequencies))
+        for i,d in enumerate(self.datasets):
+            d.group_ids = [i]
+        self.all_group_ids = list(set().union(*[c.group_ids for c in datasets]))
+
+        self.prepare_epoch(gen_tuples=False)
+        for gid in self.all_group_ids:
+            print("group {} b_sizes: {}".format(gid, [z.bs[gid] for z in [c for c in self.loaders if gid in c.group_ids]]))
 
     def n_iters(self):
         return int(self.n_tuples / self.batch_size)

@@ -1,12 +1,11 @@
 import torch, sys
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 def distance_matrix_vector(anchor, positive):
     # Given batch of anchor descriptors and positive descriptors calculate distance matrix
     d1_sq = torch.norm(anchor, p=2, dim=1,keepdim = True)
     d2_sq = torch.norm(positive, p=2, dim=1,keepdim = True)
-    
     eps = 1e-6
     return torch.sqrt(d1_sq.repeat(1, positive.size(0)) + torch.t(d2_sq.repeat(1, anchor.size(0))) - 2.0 * F.linear(anchor, positive) + eps)
 
@@ -26,7 +25,7 @@ def distance_vectors_pairwise(anchor, positive, negative=None):
         return d_a_p
 
 
-def loss_HardNet(anchor, positive, 
+def loss_HardNetMulti(anchor, positive, 
                  margin=1.0,
                  anchor_swap=False,
                  batch_reduce="min", 
