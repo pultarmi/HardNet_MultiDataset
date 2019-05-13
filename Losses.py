@@ -24,6 +24,8 @@ def distance_vectors_pairwise(anchor, positive, negative=None):
     else:
         return d_a_p
 
+def Huber(x, delta = 1.0):
+    return delta*delta*(torch.sqrt(1.0 + (x/delta)**2) - 1)
 
 def loss_HardNetMulti(anchor, positive, 
                  margin=1.0,
@@ -72,6 +74,12 @@ def loss_HardNetMulti(anchor, positive,
         sys.exit(1)
     if loss_type == "triplet_margin":
         loss = torch.clamp(margin + pos - min_neg, min=0.0)
+    elif loss_type == "triplet_margin_huber_internal":
+        loss = torch.clamp(margin + Huber(pos) - Huber(min_neg), min=0.0)
+    elif loss_type == "triplet_margin_huber_external":
+        loss = Huber(torch.clamp(margin + pos - min_neg, min=0.0))
+    elif loss_type == "triplet_margin_huber_double":
+        loss = Huber(torch.clamp(margin + Huber(pos) - Huber(min_neg), min=0.0))
     elif loss_type == "triplet_margin_robust":
         per_keep = 0.95
         loss = torch.clamp(margin + pos - min_neg, min=0.0)
