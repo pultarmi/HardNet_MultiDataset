@@ -224,51 +224,48 @@ class TotalDatasetsLoader(data.Dataset):
         return len(self.tuples)
 
 
-class FORMAT(Enum):
-    AMOS = 0
-    Brown = 1
-
-
-class Args_Brown:
-    def __init__(self, path: str, fliprot: bool, transform_dict: dict):
+class DS_parent:
+    def __init__(self):
+        group_ids = [0] # group_ids not used ATM
+        self.group_ids = group_ids
         relative_batch_size = 1 # relative_batch_size not effective ATM
-        self.path = path
         self.batch_size = relative_batch_size
+# group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
+# then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
+# each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by sum of relative sizes)
+
+
+class DS_Brown(DS_parent):
+    def __init__(self, path: str, fliprot: bool, transform_dict: dict):
+        super().__init__()
+        # group_ids = [0] # group_ids not used ATM
+        # self.group_ids = group_ids
+        # relative_batch_size = 1 # relative_batch_size not effective ATM
+        self.path = path
+        # self.batch_size = relative_batch_size
         self.fliprot = fliprot
         self.transform_dict = transform_dict
 
-class Args_AMOS:
+        bcolors.p(bcolors.YELLOW, str(self.__dict__))
+
+class DS_AMOS(DS_parent):
     def __init__(self, tower_dataset, split_name, n_patch_sets, weight_function, fliprot, transform, patch_gen, cams_in_batch, masks_dir=None):
-        relative_batch_size = 1 # relative_batch_size not effective ATM
+        super().__init__()
+        # group_ids = [0] # group_ids not used ATM
+        # self.group_ids = group_ids
+        # relative_batch_size = 1 # relative_batch_size not effective ATM
         self.tower_dataset = tower_dataset
         self.split_name = split_name
         self.n_patch_sets = n_patch_sets
         self.weight_function = weight_function
-        self.batch_size = relative_batch_size
+        # self.batch_size = relative_batch_size
         self.fliprot = fliprot
         self.transform = transform
         self.patch_gen = patch_gen
         self.cams_in_batch = cams_in_batch
         self.masks_dir = masks_dir
 
-
-class One_DS:
-    def __init__(self, args):
-        group_ids = [0] # group_ids not used ATM
-        if isinstance(args, Args_Brown):
-            self.__dict__ = args.__dict__.copy()
-            self.format = FORMAT.Brown
-        elif isinstance(args, Args_AMOS):
-            self.__dict__ = args.__dict__.copy()
-            self.format = FORMAT.AMOS
-        else:
-            raise ("incorrect args class")
-        self.group_ids = group_ids
         bcolors.p(bcolors.YELLOW, str(self.__dict__))
-
-# group_id determines sampling scheme - one group_id is chosen randomly for each batch, single dataset may be in more group_id
-# then the relative_batch_size (any positive number - applies as a ratio) determines how many patches are chosen from each dataset for inidividual batch
-# each batch has size args.batch_size (may differ slightly if args.batch_size is not divisible by sum of relative sizes)
 
 
 class DS_wrapper:
@@ -277,8 +274,7 @@ class DS_wrapper:
         self.loaders = []
         label_offset = 0
         for c in self.datasets:
-            # print(label_offset)
-            if c.format == FORMAT.Brown:
+            if isinstance(c, DS_Brown):
                 self.loaders += [
                     TotalDatasetsLoader(
                         train=True,
@@ -292,7 +288,7 @@ class DS_wrapper:
                         label_offset=label_offset,
                     )
                 ]
-            elif c.format == FORMAT.AMOS:
+            elif isinstance(c, DS_AMOS):
                 self.loaders += [
                     WBSDataset(
                         root=c.tower_dataset,
@@ -313,8 +309,8 @@ class DS_wrapper:
                     )
                 ]
             else:
-                raise ("invalid DS format")
-            label_offset = self.loaders[-1].max_label()
+                raise Exception("invalid DS class")
+            label_offset = self.loaders[-1].max_label()+1
 
         for loader in self.loaders:
             loader.bs = {}
@@ -339,7 +335,7 @@ class DS_wrapper:
             cur_loaders = [c for c in self.loaders if gid in c.group_ids]
             self.gid_to_iters[gid] = [iter(torch.utils.data.DataLoader(c, batch_size=c.bs[gid], shuffle=False, **kwargs)) for c in cur_loaders]
 
-    def __init__(self, datasets: [One_DS], n_tuples, batch_size, frequencies, fliprot=False):
+    def __init__(self, datasets: [DS_parent], n_tuples, batch_size, frequencies, fliprot=False):
         self.n_tuples = n_tuples
         self.gid_to_DS = {}
         self.b_size = batch_size

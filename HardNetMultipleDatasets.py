@@ -207,7 +207,7 @@ def test(test_loader, model, epoch, logger_test_name, args):
     print("\33[91mTest set: AP: {:.8f}\33[0m".format(AP(labels, distances)))
         
 
-def train(train_loader, model, optimizer, epoch, load_triplets=False, WBSLoader=None):
+def train(train_loader, model, optimizer, epoch):
     model.train()
     train_loader.prepare_epoch()
     pbar = tqdm(enumerate(train_loader))
@@ -302,15 +302,15 @@ def main(train_loader, test_loaders, model):
 if __name__ == "__main__":
     tst = get_test_loaders()
     DSs = []
-    DSs += [One_DS(Args_Brown("Datasets/liberty.pt", True, default_transform))]
-    DSs += [One_DS(Args_Brown('Datasets/liberty_harris.pt', True, default_transform))]
-    DSs += [One_DS(Args_Brown('Datasets/notredame.pt', True, default_transform))]
-    DSs += [One_DS(Args_Brown('Datasets/notredame_harris.pt', True, default_transform))]
-    DSs += [One_DS(Args_Brown('Datasets/yosemite.pt', True, default_transform))]
-    DSs += [One_DS(Args_Brown('Datasets/yosemite_harris.pt', True, default_transform))]
-    DSs += [One_DS(Args_Brown('Datasets/hpatches_split_view_train.pt', True, default_transform))]
-    DSs += [One_DS(Args_AMOS('Datasets/AMOS_views_v3/Train', split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
-                           args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks'))]
+    DSs += [DS_Brown("Datasets/liberty.pt", True, default_transform)]
+    DSs += [DS_Brown('Datasets/liberty_harris.pt', True, default_transform)]
+    DSs += [DS_Brown('Datasets/notredame.pt', True, default_transform)]
+    DSs += [DS_Brown('Datasets/notredame_harris.pt', True, default_transform)]
+    DSs += [DS_Brown('Datasets/yosemite.pt', True, default_transform)]
+    DSs += [DS_Brown('Datasets/yosemite_harris.pt', True, default_transform)]
+    DSs += [DS_Brown('Datasets/hpatches_split_view_train.pt', True, default_transform)]
+    DSs += [DS_AMOS('Datasets/AMOS_views_v3/Train', split_name, args.n_patch_sets, get_WF_from_string(args.weight_function), True, transform_AMOS,
+                    args.patch_gen, args.cams_in_batch, masks_dir='Datasets/AMOS_views_v3/Masks')]
 
     wrapper = DS_wrapper(DSs, args.n_triplets, args.batch_size, frequencies=[1,1,1,1,1,1,6,6])
     os.makedirs(os.path.join(args.model_dir, save_name), exist_ok=True)
