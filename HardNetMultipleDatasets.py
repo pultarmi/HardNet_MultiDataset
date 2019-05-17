@@ -85,6 +85,7 @@ split_name = "_".join(txt)
 txt = []
 txt += ["id:" + str(args.id)]
 txt += ["TrS:" + args.name]
+txt += ["loss:" + args.loss.replace('_','')]
 txt += [split_name]
 txt += [args.batch_reduce]
 txt += ["tps:" + str(args.n_triplets)]
