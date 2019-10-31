@@ -17,7 +17,7 @@ numpy==1.15.4
 opencv-python==3.4.5.20
 pandas==0.23.4
 pathos==0.2.2.1
-Pillow==5.4.1
+Pillow==6.2.0
 pkg-resources==0.0.0
 pox==0.2.4
 ppft==1.6.4.8
