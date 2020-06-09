@@ -1,27 +1,27 @@
-**Training HardNet on multiple datasets (including AMOS views)**
+**Training HardNet8 on multiple datasets**
 
-Repo provides scripts to train on multiple datasets of format of 6Brown or AMOS. The main script is HardNetMultipleDatasets.py
+Provided code allows to train HardNet8 (described in the [thesis](http://cmp.felk.cvut.cz/~qqpultar/Download/Master_thesis.pdf)) on multiple datasets of format of Liberty or AMOS. Use the script ftrain.py for training.
 
-To run the code, you must first download the datasets [AMOS Patches](http://cmp.felk.cvut.cz/~qqpultar/AMOS_views_v3.zip), 
-[HPatches view split](http://cmp.felk.cvut.cz/~qqpultar/hpatches_split_view_train.pt) into Datasets folder - see the definition in the HardNetMultipleDatasets.py file. The script provides an easy way to define source datasets and their relative frequency (one DS per batch). The default definition is the one we used to get weights for [WISW@CAIP2019](http://cvg.dsi.unifi.it/cvg/index.php?id=caip-2019-contest#results) competition.
+Pretrained models are [available](http://cmp.felk.cvut.cz/~qqpultar/Weights/Weights-HardNet8.zip) in ".pt" and ".jitpt" formats. The latter can be loaded via torch.jit.load(name) without any additional code.
 
-HPatches view split pt file was generated via the script HPatchesDatasetCreator.py. If you want to create it yourself (you can generate illum split as well), you need to download [hpatches-release](https://github.com/hpatches/hpatches-dataset) folder, run the script and then you should get the exactly same file.
+If you want to train the model, you must first download and unzip the [datasets](http://cmp.felk.cvut.cz/~qqpultar/Download/Datasets.zip). Please make sure to use the Liberty dataset from this file because it contains also source image IDs.
 
 **Example:**
+
+Run this to train the universal HardNet8-Univ descriptor on AMOS and Liberty datasets.
 ```
-python -utt HardNetMultipleDatasets.py --id=1 --epochs=10 --name=example --batch-size=3072 2>&1
+python -utt ftrain.py --arch=h8 --ds=v4+lib --loss=tripletMargin++
 ```
+
+This command was used to train HardNet8-PT submitted to [CVPR IMW 2020](https://vision.uvic.ca/image-matching-challenge/).
+```
+python -utt ftrain.py --arch=h8E512 --ds=lib+colo+notre --bs=9000 --mpos=0.5 --fewcams
+```
+
+In both cases, to get the final model, run the code in Notebooks/add_pca.ipynb (you have to change the name of model) to create new checkpoint with added PCA compression.
+
 
 **Please cite us if you use this code:**
-
-[Working hard to know your neighbor's margins: Local descriptor learning loss](http://cmp.felk.cvut.cz/~radenfil/publications/Mishchuk-NIPS17.pdf)
-```
-@article{HardNet2017,
-    author 	= {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
-    title 	= "{Working hard to know your neighbor's margins: Local descriptor learning loss}",
-    year 	= 2017}
-(c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
-```
 
 [Leveraging Outdoor Webcams for Local Descriptor Learning](http://diglib.tugraz.at/download.php?id=5c5941d91cdd5&location=browse)
 ```
@@ -33,3 +33,14 @@ python -utt HardNetMultipleDatasets.py --id=1 --epochs=10 --name=example --batch
     booktitle 	= {Proceedings of CVWW 2019}
 }
 ```
+
+[Working hard to know your neighbor's margins: Local descriptor learning loss](http://cmp.felk.cvut.cz/~radenfil/publications/Mishchuk-NIPS17.pdf)
+```
+@article{HardNet2017,
+    author 	= {Anastasiya Mishchuk, Dmytro Mishkin, Filip Radenovic, Jiri Matas},
+    title 	= "{Working hard to know your neighbor's margins: Local descriptor learning loss}",
+    year 	= 2017}
+(c) 2017 by Anastasiia Mishchuk, Dmytro Mishkin
+```
+
+
