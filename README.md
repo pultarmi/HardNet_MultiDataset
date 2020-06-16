@@ -13,7 +13,7 @@ Run this to train the universal HardNet8-Univ descriptor on AMOS and Liberty dat
 python -utt ftrain.py --arch=h8 --ds=v4+lib --loss=tripletMargin++
 ```
 
-This command was used to train HardNet8-PT submitted to [CVPR IMW 2020](https://vision.uvic.ca/image-matching-challenge/).
+This command was used to train HardNet8-PTv2 submitted to [CVPR IMW 2020](https://vision.uvic.ca/image-matching-challenge/).
 ```
 python -utt ftrain.py --arch=h8E512 --ds=lib+colo+notre --bs=9000 --mpos=0.5 --fewcams
 ```
