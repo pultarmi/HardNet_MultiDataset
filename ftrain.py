@@ -16,7 +16,7 @@ class Do_everything(Callback):
         if hasattr(self, 'skip_prepare') and self.skip_prepare:
             return
         # L.model.drop_path_prob = args.drop_path_prob * L.epoch / args.epochs
-        L.model.drop_path_prob = 0.2 * L.epoch / args.epochs
+        L.model.drop_path_prob = 0.2 * L.epoch / args.epochs # was used for soft margin
         L.dls.loaders[0].prepare_epoch()
 
     def begin_batch(self):  # before the output and loss are computed. # on_batch_begin
@@ -46,7 +46,6 @@ class Do_everything(Callback):
 
     def begin_validate(self):  # on_epoch_end
         L = self.learn
-        # if not args.AMOS_RGB and not args.depths:
         if not args.notest:
             for test_loader in L.test_loaders:
                 test(test_loader, L.model, test_loader.dataset.name)
@@ -64,27 +63,10 @@ def our_loss(name:str, embeddings, info):
     return loss.mean(), edge
     # return torch.sum(loss), edge
 
-# def our_loss_(name:str, miner, embeddings, info):
-#     labels = info['labels'].long().cuda()
-#     hard_pairs = miner(embeddings, labels)
-#     loss, edge = our_tripletMargin_(embeddings=embeddings, labels=labels, indices_tuple=hard_pairs,
-#                                        margin_pos=args.marginpos,
-#                                        detach_neg=args.detach,
-#                                        get_edge=True,
-#                                        block_sizes=info['block_sizes'] if 'block_sizes' in info.keys() else None,)
-#     return loss.mean(), edge
-
 def our_loss_generalized(name:str, embeddings, info):
     labels = info['labels'].long().cuda()
-    # hard_pairs = miner(embeddings, labels)
-    loss, edge = tripletMargin_generalized(embeddings=embeddings, labels=labels,
-                                           margin_pos=args.marginpos,
-                                           # detach_neg=args.detach,
-                                           # get_edge=True,
-                                           # block_sizes=info['block_sizes'] if 'block_sizes' in info.keys() else None
-                                           )
+    loss, edge = tripletMargin_generalized(embeddings=embeddings, labels=labels, margin_pos=args.marginpos)
     return loss.mean(), edge
-    # return torch.sum(loss), edge
 
 def softMarginLoss(loss_fc, embeddings, info):
     loss = loss_fc(embeddings)
@@ -121,12 +103,9 @@ def get_loss_function(name, num_classes, embedding_size=None, miner=None):
         print('using softMargin')
         loss = partial(softMarginLoss, DynamicSoftMarginLoss())
     elif name[-2:]=='++':
-        printc.red('using new FASTER implem')
+        printc.red('using generalized loss')
         loss = partial(our_loss_generalized, name[:-2]) # new implementation
-    # elif name[-1]=='+':
-    #     printc.red('using new implem')
-    #     loss = partial(our_loss_, name[:-1], miners.BatchHardMiner()) # new implementation
-    else:
+    else: # this is default (tripletMargin)
         assert args.Npos == 2
         loss = partial(our_loss, name)
     return loss

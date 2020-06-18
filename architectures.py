@@ -126,6 +126,7 @@ def archs():
         'h7sep': HardNet_7_sep,  # channels=2
         'h8sep': HardNet_8_sep,  # channels=2
         'h8pre': HardNet_8_256_pre,  # channels=3
+        'h8E512pre': HardNet_8_512_pre,  # channels=3
         'h8x2pre': HardNet_8_256l_pre,  # channels=3
 
         'De32': partial(DenseNet,growth_rate=32,block_config=(6, 12, 24, 16),bn_size=4, drop_rate=0.3, Nout_features=128,num_init_features=64),
@@ -133,6 +134,22 @@ def archs():
         'De16s': partial(DenseNet,growth_rate=16,block_config=(6, 8, 16, 12),bn_size=4, drop_rate=0.3, Nout_features=128,num_init_features=64),
         'De16xs': partial(DenseNet,growth_rate=16,block_config=(6, 8, 16, 12),bn_size=4, drop_rate=0.3, Nout_features=128,num_init_features=32),
 
+        # 'R1': partial(ResNet,channels=1,block=BasicBlock,layers=[3, 4, 6, 3]),
+        # 'R2': partial(ResNet2,channels=1,block=BasicBlock,layers=[3, 4, 6, 3]),
+        # 'R3': partial(ResNet3,channels=1,block=BasicBlock,layers=[3, 4, 6, 3]),
+
+        # 'R4': partial(ResNet4,channels=1,layers=[3, 4, 6, 3]),
+        # 'R4s': partial(ResNet4s,channels=1,layers=[3, 4, 6, 3]),
+        # 'R4ss': partial(ResNet4ss,channels=1,layers=[3, 4, 6]),
+        # 'R4sss': partial(ResNet4sss,channels=1,layers=[3, 4, 6]),
+
+        # 'R5': ResNet5,
+        # 'R6': ResNet6,
+        # 'R6x': partial(ResNet6, layers=[32,64,64,128]),
+        # 'R7': partial(ResNet7, layers=[32,64,128,256]),
+        # 'R7x': partial(ResNet7, layers=[32,64,128,256]),
+
+        # 'R5': ResNet_new,
         'Rc3': partial(ResNet_new, layers=[16,32,64,128], resblock=ResBlock_c3),
         'Rc3x': partial(ResNet_new, layers=[32, 64, 64, 128], resblock=ResBlock_c3),
         'Rc2': partial(ResNet_new, layers=[32, 64, 64, 128], resblock=ResBlock_c2),
@@ -776,6 +793,43 @@ class HardNet_8_256_pre(BaseHardNet):
             nn.Dropout(0.3),
             nn.Conv2d(256, 256, kernel_size=8, bias=False),
             nn.BatchNorm2d(256, affine=False),
+        )
+        self.features.apply(weights_init)
+
+class HardNet_8_512_pre(BaseHardNet):
+    osize = 512
+    def __init__(self, channels=3):
+        super(HardNet_8_512_pre, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(channels, 10, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(10, affine=False),
+            nn.Tanh(),
+            nn.Conv2d(10, 1, kernel_size=1, padding=0, bias=False),
+            nn.Tanh(),
+            nn.Conv2d(1, 32, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(32, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(32, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(128, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(256, affine=False),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Conv2d(256, 512, kernel_size=8, bias=False),
+            nn.BatchNorm2d(512, affine=False),
         )
         self.features.apply(weights_init)
 

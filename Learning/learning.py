@@ -83,6 +83,7 @@ def my_collate_fn(batch, key=''): # https://github.com/pytorch/pytorch/blob/mast
             numel = sum([x.numel() for x in batch])
             storage = elem.storage()._new_shared(numel)
             out = elem.new(storage)
+        # print(batch[0].shape)
         return torch.cat(batch, 0, out=out)
     if isinstance(elem, torch.Tensor):
         out = None
@@ -115,56 +116,52 @@ def test(loader, model, name):
 def safe_transform(img, transformation=None):
     if transformation is not None:
         return transformation(img)
-    return img
+    # return img
+    return img.unsqueeze(0) # because pytorch transform adds dimension
 
 
-none_transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.ToTensor()
-])
-default_resize_transform = transforms.Compose([
+trans_resize32 = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize(32),
     transforms.ToTensor()
 ])
 
-default_resize_transform48 = transforms.Compose([
+trans_resize48 = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize(48),
     transforms.ToTensor()
 ])
 
-default_resize_transform64 = transforms.Compose([
+trans_none = transforms.Compose([
     transforms.ToPILImage(),
     transforms.ToTensor()
 ])
 
-default_crop_transform = transforms.Compose([
+trans_crop = transforms.Compose([
     transforms.ToPILImage(),
     transforms.CenterCrop(32),
     transforms.ToTensor()
 ])
 
-transform_AMOS_resize = transforms.Compose([
+trans_crop_resize = transforms.Compose([
     transforms.ToPILImage(),
     transforms.CenterCrop(64),
     transforms.Resize(32),
     transforms.ToTensor()
 ])
 
-transform_AMOS_resize48 = transforms.Compose([
+trans_crop_resize48 = transforms.Compose([
     transforms.ToPILImage(),
     transforms.CenterCrop(64),
     transforms.Resize(48),
     transforms.ToTensor()
 ])
 
-transform_AMOS_resize64 = transforms.Compose([
+trans_crop_resize64 = transforms.Compose([
     transforms.ToPILImage(),
     transforms.CenterCrop(64),
     transforms.ToTensor()
 ])
-
 
 transform_AMOS_s = transforms.Compose([ # CPU
     transforms.ToPILImage(),
@@ -175,7 +172,7 @@ transform_AMOS_s = transforms.Compose([ # CPU
     transforms.ToTensor()
 ])
 
-transform_AMOS = transforms.Compose([ # CPU
+trans_AMOS = transforms.Compose([ # CPU
     transforms.ToPILImage(),
     transforms.Pad(10, padding_mode='reflect'), # otherwise small black corners appear
     transforms.RandomAffine(25, scale=(0.8, 1.4), shear=25, resample=Image.BICUBIC),
@@ -183,7 +180,6 @@ transform_AMOS = transforms.Compose([ # CPU
     transforms.RandomResizedCrop(32, scale=(0.7, 1.0), ratio=(0.9, 1.10)),
     transforms.ToTensor()
 ])
-
 
 
 def get_transform_AMOS_kornia1(in_size=96, out_size=32):
@@ -235,6 +231,17 @@ def get_transform_lib_kornia(in_size=64):
         kornia.augmentation.RandomAffine(degrees=(-15.0, 15.0), scale=(0.8, 1.2), shear=(-10, 10), translate=(0.0, 0.07)),
         kornia.augmentation.CenterCrop(in_size),
         kornia.Resize((out_size, out_size)),
+    ).cuda()
+
+def get_transform_lib_kornia_noblur(in_size=64):  # best for liberty
+    print(get_transform_lib_kornia2.__name__)
+    out_size = 32
+    return nn.Sequential(
+        # kornia.filters.GaussianBlur2d((7, 7), (0.6, 0.6)),  # Blur for proper downscale
+        torch.nn.ReplicationPad2d(8),  # otherwise small black corners appear
+        kornia.augmentation.RandomAffine(degrees=(-5.0, 5.0), scale=(0.9, 1.0), shear=(5.0, 5.0), translate=(0.03, 0.03)),
+        kornia.augmentation.CenterCrop(in_size),
+        kornia.Resize((out_size, out_size))
     ).cuda()
 
 def get_transform_lib_kornia2(in_size=64):  # best for liberty
@@ -343,21 +350,20 @@ class KoT:
                 'AMOS': get_transform_AMOS_kornia4,
                 'other': get_transform_lib_kornia2,
             },
-            'resize32': { # best for liberty
-                # 'AMOS': get_transform_AMOS_kornia4,
+            'resize32': {
                 'other': get_transform_lib_32,
             },
-            'resize48': { # best for liberty
-                # 'AMOS': get_transform_AMOS_kornia4,
+            'resize48': {
                 'other': get_transform_lib_48,
             },
-            'resize64': { # best for liberty
-                # 'AMOS': get_transform_AMOS_kornia4,
+            'resize64': {
                 'other': get_transform_lib_64,
             },
             'resize_crop': { # for test of flatness
-                # 'AMOS': get_transform_AMOS_kornia4,
                 'other': get_transform_lib_kornia_resize_crop,
+            },
+            'noblur': {
+                'other': get_transform_lib_kornia_noblur,
             },
         }
 
@@ -368,14 +374,6 @@ class KoT:
             aux = {k:aux[k]() for k in aux.keys()} # initialize only the returned ones
         return aux
 
-
-# transform_train = transforms.Compose([
-#             transforms.Lambda(np_reshape64),
-#             transforms.ToPILImage(),
-#             transforms.RandomRotation(5,PIL.Image.BILINEAR),
-#             transforms.RandomResizedCrop(32, scale = (0.9,1.0),ratio = (0.9,1.1)),
-#             transforms.Resize(32),
-#             transforms.ToTensor()])
 
 # def transform_AMOS_alb(img): # CPU
 #     img = img.permute(2,1,0).data.cpu().numpy()
@@ -389,16 +387,3 @@ class KoT:
 #     res = torch.tensor(res['image'])
 #     res = res.permute(2,1,0)
 #     return res
-
-# transform_AMOS_kornia = transforms.Compose([ # GPU
-#     torch.nn.ReplicationPad2d(10), # otherwise small black corners appear
-#     kornia.augmentation.RandomAffine(degrees=(-25.0, 25.0), scale=(0.8, 1.4), shear=[-25,25]),
-#     kornia.augmentation.CenterCrop(64),
-#     kornia.augmentation.RandomResizedCrop(size=(32, 32), scale=(0.7, 1.0), ratio=(0.9, 1.10)),
-# ])
-
-# default_resize_transform = {'default': resize_transform}
-# default_crop_transform = {'default': crop_transform}
-# easy_transform={'e1':train_transform, 'e2':train_transform, 'e3':train_transform, 'default':crop_transform}
-# default_resize48_transform = {'default': resize_transform48}
-# default_resize64_transform = {'default': resize_transform64}

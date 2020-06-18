@@ -1,7 +1,8 @@
-import math, numpy as np, sys, PIL, random, os, smtplib, socket, shutil, subprocess, cv2
+# import math, numpy as np, sys, PIL, random, os, smtplib, socket, shutil, subprocess, cv2
+import math, PIL, random, shutil, cv2
 import torch.nn.init
-import torchvision.transforms as transforms
-from email.mime.text import MIMEText
+# import torchvision.transforms as transforms
+# from email.mime.text import MIMEText
 from PIL import Image
 from fire import Fire
 from glob import glob
@@ -183,20 +184,20 @@ def get_patches_loss(info): # returns losses, has two dims
     ### DELETE
     return losses
 
-def send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560', text=''): # you can use for longer training
-    msg = MIMEText(text)
-
-    if socket.gethostname() == ignore_host:
-        return
-    msg["Subject"] = socket.gethostname() + " just finished running a job "# + os.path.basename(__main__.__file__)
-    msg["From"] = "clustersgpu@gmail.com"
-    msg["To"] = recipient
-
-    s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-    s.ehlo()
-    s.login("clustersgpu@gmail.com", "4c46bc24732")
-    s.sendmail("clustersgpu@gmail.com", recipient, msg.as_string())
-    s.quit()
+# def send_email(recipient='milan.pultar@gmail.com', ignore_host='milan-XPS-15-9560', text=''): # you can use for longer training
+#     msg = MIMEText(text)
+#
+#     if socket.gethostname() == ignore_host:
+#         return
+#     msg["Subject"] = socket.gethostname() + " just finished running a job "# + os.path.basename(__main__.__file__)
+#     msg["From"] = "clustersgpu@gmail.com"
+#     msg["To"] = recipient
+#
+#     s = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+#     s.ehlo()
+#     s.login("clustersgpu@gmail.com", "4c46bc24732")
+#     s.sendmail("clustersgpu@gmail.com", recipient, msg.as_string())
+#     s.quit()
 
 class printc:
     HEADER = "\033[95m"
@@ -370,7 +371,7 @@ class Interface:
             torch.save((patches, ids), pout)
 
     def extract_patches(self,
-                        dir_in='Datasets/Phototourism/colosseum_exterior/dense',
+                        dir_in='Datasets/Phototourism/trevi_fountain/dense',
                         dir_out='Datasets/Phototourism',
                         ):
         printc.yellow('\n'.join(['Input arguments:'] + [str(x) for x in sorted(locals().items()) if x[0] != 'self']))
@@ -412,7 +413,57 @@ class Interface:
         ids_cam = torch.tensor(ids_cam)
         save_path = pjoin(dir_out, getbase(getdir(dir_in))+'.pt')
         print('saving to', save_path)
-        # torch.save((patches, ids3D, ids_cam), save_path)
+        torch.save({'patches':patches, 'labels':ids3D, 'cam_ids':ids_cam}, save_path)
+
+    def extract_patches_rgb(self,
+                        dir_in='Datasets/Phototourism/colosseum_exterior/dense',
+                        dir_out='Datasets/Phototourism',
+                        which = 'labelscolo.pt',
+                        ):
+        printc.yellow('\n'.join(['Input arguments:'] + [str(x) for x in sorted(locals().items()) if x[0] != 'self']))
+        cams, imgs, pts = read_model(path=pjoin(dir_in,'sparse'), ext='.bin')
+        print('found points', len(pts))
+        paths = glob(pjoin(dir_in, 'images', '*'))
+        images = {}
+        for p in tqdm(paths):
+            images[getbase(p)] = np.asarray(PIL.Image.open(p))
+        ids3D = []
+        patches = []
+        ids_cam = []
+
+        subset = torch.load(which)
+        for i in tqdm(list(pts.keys())):
+            if i not in subset:
+                continue
+            image_ids = pts[i].image_ids
+            point2D_idxs = pts[i].point2D_idxs
+            patches_one = []
+            ids3D_one = []
+            ids_cam_one = []
+            for a,b in zip(image_ids,point2D_idxs):
+                img_data = imgs[a]
+                D2pt = img_data.xys[b]
+                img = PIL.Image.fromarray(images[img_data.name], 'RGB')
+                w, h = img.size[0], img.size[1]
+                left, top, right, bottom = D2pt[0] - 32, D2pt[1] - 32, D2pt[0] + 32, D2pt[1] + 32
+                if not (left>0 and top>0 and right<w-1 and bottom<h-1): # no black rectangles
+                    continue
+                patch = img.crop((left, top, right, bottom))
+                # patch = torch.tensor(np.asarray(patch))
+                patch = torch.as_tensor(np.asarray(patch))
+                ids3D_one += [i]
+                ids_cam_one += [a]
+                patches_one += [patch]
+            if len(patches_one) > 1:
+                patches += patches_one
+                ids3D += ids3D_one
+                ids_cam += ids_cam_one
+        print('stacking')
+        patches = torch.stack(patches, 0)
+        ids3D = torch.tensor(ids3D)
+        ids_cam = torch.tensor(ids_cam)
+        save_path = pjoin(dir_out, getbase(getdir(dir_in))+'_RGB.pt')
+        print('saving to', save_path)
         torch.save({'patches':patches, 'labels':ids3D, 'cam_ids':ids_cam}, save_path)
 
     def filter_sets(self,

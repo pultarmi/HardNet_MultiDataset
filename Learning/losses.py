@@ -1,9 +1,9 @@
 import torch
 import torch.nn.functional as F
-from pytorch_metric_learning import miners
-from pytorch_metric_learning.losses import TripletMarginLoss, CosFaceLoss
-from pytorch_metric_learning.utils import loss_and_miner_utils
-import numpy as np
+# from pytorch_metric_learning import miners
+# from pytorch_metric_learning.losses import TripletMarginLoss, CosFaceLoss
+# from pytorch_metric_learning.utils import loss_and_miner_utils
+# import numpy as np
 import torch.nn as nn
 
 

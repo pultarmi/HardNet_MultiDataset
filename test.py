@@ -8,7 +8,7 @@ import numpy_indexed as npi
 
 
 become_deterministic(0)
-transformation = transform_AMOS_resize
+transformation = trans_crop_resize
 # transformation = transform_AMOS_resize48
 # transformation = transform_AMOS_resize64
 

@@ -1,4 +1,3 @@
-# import torchvision.datasets as dset
 from copy import *
 import torch.utils.data as data
 from Utils.AMOS_dataset import AMOS_dataset
@@ -13,7 +12,7 @@ import numpy_indexed as npi
 def get_test_loaders(names, bsize):
     aux = [
         torch.utils.data.DataLoader(
-            TestLoader_6Brown(root=os.path.join('Datasets/6Brown'), name=name, transform=default_resize_transform),
+            TestLoader_6Brown(root=os.path.join('Datasets/6Brown'), name=name, transform=trans_resize32),
             batch_size=bsize, shuffle=False, **{'num_workers': 4, 'pin_memory': True})
         for name in names
     ]
@@ -34,7 +33,8 @@ class TestLoader_6Brown:
         self.patches = dataset['patches']
         self.matches = dataset['matches']
         self.labels = dataset['labels']
-        self.cam_ids = dataset['cam_ids']
+        if 'cam_ids' in dataset.keys():
+            self.cam_ids = dataset['cam_ids']
 
     def __getitem__(self, index):
         m = self.matches[index]
@@ -51,7 +51,7 @@ class TrainLoader_6Brown(data.Dataset):
     dataset_path: str
     label_offset: int = 0
     fliprot: bool = False
-    transform: dict = None
+    transform: object = None
     Npositives:int = 2
     args:object = None
 
@@ -64,7 +64,11 @@ class TrainLoader_6Brown(data.Dataset):
             assert False, 'the format has changed, I expect dictionary'
         self.patches = dataset['patches']
         self.labels = dataset['labels']
-        self.cam_ids = dataset['cam_ids']
+        if 'cam_ids' in dataset.keys():
+            self.cam_ids = dataset['cam_ids']
+
+        if len(self.patches.shape) == 4 and self.patches.shape[-1]==3:
+            self.patches = self.patches.permute(0,3,1,2)
 
         print('found patches:',len(self.patches))
         print('found classes:',len(torch.unique(self.labels)))
@@ -169,6 +173,9 @@ class TrainLoader_6Brown(data.Dataset):
     def __getitem__(self, idx):
         t = self.tuples[idx] # t[0] label, t[1] indices
         patches = [safe_transform(self.patches[i], self.transform) for i in t[1]]
+        # if len(patches[0].shape) == 2:
+        #     patches = [c.unsqueeze(0) for c in patches]
+
         if self.fliprot:
             if random.random() > 0.5:  # do rotation
                 patches = [p.permute(0, 2, 1) for p in patches]
@@ -184,7 +191,7 @@ class DS_parent:
 @dataclass
 class DS_Brown(DS_parent):
     path:str
-    transform:dict
+    transform:object
     fliprot:bool = True
     workers:int = 1
 
@@ -452,157 +459,136 @@ anti_aug_trans = transforms.Compose([ # CPU
 ])
 
 def get_train_dataset(args, data_name): # returns dataset wrapper
-    AllBrown = [DS_Brown('Datasets/6Brown/'+c+'.pt', default_resize_transform) for c in ('liberty','liberty_harris','notredame','notredame_harris','yosemite','yosemite_harris')]
+    AllBrown = [DS_Brown('Datasets/6Brown/' + c +'.pt', trans_resize32) for c in ('liberty', 'liberty_harris', 'notredame', 'notredame_harris', 'yosemite', 'yosemite_harris')]
     wrapper = None
     if args.ds in ['mix']:
         DSs = []
         DSs += AllBrown
-        DSs += [DS_Brown('Datasets/HPatches/hpatches_split_view_train.pt', default_resize_transform)]
-        DSs += [DS_AMOS('Datasets/AMOS-views/AMOS-views-v3', data_name, args.patch_sets, args.weight_function, transform_AMOS,
+        DSs += [DS_Brown('Datasets/HPatches/hpatches_split_view_train.pt', trans_resize32)]
+        DSs += [DS_AMOS('Datasets/AMOS-views/AMOS-views-v3', data_name, args.patch_sets, args.weight_function, trans_AMOS,
                         args.patch_gen, args.cams_in_batch, workers=10)]
         wrapper = DS_wrapper(DSs, args.tuples, args.batch_size, frequencies=[1,1,1,1,1,1,6,6])
     elif args.ds in ['mix_good']:
         DSs = [
-            DS_Brown('Datasets/HPatches/hpatches_illum-view_easy.pt', default_resize_transform),
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/Phototourism/hagia_sophia_interior_middleedges.pt', default_resize_transform, workers=3),
+            DS_Brown('Datasets/HPatches/hpatches_illum-view_easy.pt', trans_resize32),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/hagia_sophia_interior_middleedges.pt', trans_resize32, workers=3),
         ]
     elif args.ds in ['lib+sofia+AMOS']:
         DSs = [
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/Phototourism/hagia_sophia_interior_middleedges.pt', default_resize_transform, workers=3),
-            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/hagia_sophia_interior_middleedges.pt', trans_resize32, workers=3),
+            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
         ]
     elif args.ds in ['lib+colo']:
         DSs = [
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/Phototourism/colosseum_exterior_pn1600000.pt'.format(args.ds), default_resize_transform, workers=3),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/colosseum_exterior_p1600000.pt'.format(args.ds), trans_resize32, workers=3),
         ]
     elif args.ds in ['v4+lib']:
         DSs = [
-            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
+            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
         ]
     elif args.ds in ['lib+v4']:
         DSs = [
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
         ]
     elif args.ds in ['lib+notre']:
         DSs = [
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/6Brown/notredame.pt', default_resize_transform),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/6Brown/notredame.pt', trans_resize32),
         ]
     elif args.ds in ['lib+colo+notre']:
         DSs = [
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/6Brown/notredame.pt', default_resize_transform),
-            DS_Brown('Datasets/Phototourism/colosseum_exterior_p1600000.pt'.format(args.ds), default_resize_transform, workers=3),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/colosseum_exterior_p1600000.pt'.format(args.ds), trans_resize32, workers=3),
+            DS_Brown('Datasets/6Brown/notredame.pt', trans_resize32),
+        ]
+    elif args.ds in ['lib+colo+notre_RGB']:
+        DSs = [
+            DS_Brown('Datasets/6Brown/liberty3x.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/colosseum_exterior_p1600000_RGB.pt'.format(args.ds), trans_resize32, workers=3),
+            DS_Brown('Datasets/6Brown/notredame3x.pt', trans_resize32),
         ]
     elif args.ds in ['v4+lib+colo']:
         DSs = [
-            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/Phototourism/colosseum_exterior_pn1600000.pt'.format(args.ds), default_resize_transform, workers=3),
+            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/colosseum_exterior_p1600000.pt'.format(args.ds), trans_resize32, workers=3),
         ]
     elif args.ds in ['v4+lib+colo+trevi']:
         DSs = [
-            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
-            DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform),
-            DS_Brown('Datasets/Phototourism/colosseum_exterior_pn1600000.pt'.format(args.ds), default_resize_transform, workers=3),
-            DS_Brown('Datasets/Phototourism/trevi_fountain_pn1600000.pt'.format(args.ds), default_resize_transform, workers=3),
+            DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10),
+            DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32),
+            DS_Brown('Datasets/Phototourism/colosseum_exterior_p1600000.pt'.format(args.ds), trans_resize32, workers=3),
+            DS_Brown('Datasets/Phototourism/trevi_fountain_p1600000.pt'.format(args.ds), trans_resize32, workers=3),
         ]
-    elif args.ds in ['HP_easy']:
-        DSs = [DS_Brown('Datasets/HPatches/hpatches_illum-view_easy.pt', default_resize_transform, workers=3)]
-    elif args.ds in ['HP_hard']:
-        DSs = [DS_Brown('Datasets/HPatches/hpatches_illum-view_hard.pt', default_resize_transform, workers=3)]
-    elif args.ds in ['HP_tough']:
-        DSs = [DS_Brown('Datasets/HPatches/hpatches_illum-view_tough.pt', default_resize_transform, workers=3)]
-    elif args.ds in ['HPs_illum_all']:
-        DSs = [DS_Brown('Datasets/HPatches/{}.pt'.format(args.ds), default_resize_transform, workers=3)]
-    elif args.ds in ['HPs_illum_all-crop']:
-        DSs = [DS_Brown('Datasets/HPatches/HPs_illum_all.pt', default_crop_transform, workers=3)]
     elif args.ds in ['AB']:
         DSs = []
         DSs += AllBrown
-        DSs += [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS,
-                        args.patch_gen, args.cams_in_batch, workers=10)]
+        DSs += [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10)]
         wrapper = DS_wrapper(DSs, args.tuples, args.batch_size, frequencies=[1, 1, 1, 1, 1, 1, 6])
     elif args.ds in ['brown']:
-        wrapper = DS_wrapper(AllBrown, args.tuples, args.batch_size, frequencies=[1, 1, 1, 1, 1, 1])
+        wrapper = DS_wrapper(AllBrown, args.tuples, args.batch_size)
 
-    elif args.ds in ['liberty','notredame','yosemite']:
-        DSs = [DS_Brown('Datasets/6Brown/{}.pt'.format(args.ds), transform=default_resize_transform, workers=8)]
+    elif args.ds in ['HP_easy']:
+        DSs = [DS_Brown('Datasets/HPatches/hpatches_illum-view_easy.pt', trans_resize32, workers=3)]
+    elif args.ds in ['HP_hard']:
+        DSs = [DS_Brown('Datasets/HPatches/hpatches_illum-view_hard.pt', trans_resize32, workers=3)]
+    elif args.ds in ['HP_tough']:
+        DSs = [DS_Brown('Datasets/HPatches/hpatches_illum-view_tough.pt', trans_resize32, workers=3)]
+    elif args.ds in ['HPs_illum_all']:
+        DSs = [DS_Brown(f'Datasets/HPatches/{args.ds}.pt', trans_resize32, workers=3)]
+    elif args.ds in ['HPs_illum_all-crop']:
+        DSs = [DS_Brown('Datasets/HPatches/HPs_illum_all.pt', trans_crop, workers=3)]
+
     elif args.ds in ['liberty48']:
-        DSs = [DS_Brown('Datasets/6Brown/liberty.pt', transform=default_resize_transform48, workers=8)]
+        DSs = [DS_Brown('Datasets/6Brown/liberty.pt', transform=trans_resize48, workers=8)]
     elif args.ds in ['liberty64']:
-        DSs = [DS_Brown('Datasets/6Brown/liberty.pt', transform=default_resize_transform64, workers=8)]
-    elif args.ds in ['yosemite_small','yosemite_cl']:
-        DSs = [DS_Brown('Datasets/6Brown/{}.pt'.format(args.ds), transform=default_resize_transform, workers=8)]
-    elif args.ds in ['yosemite_cl_times2','yosemite_cl_times3','yosemite_cl_times4','yosemite_cl_times8']:
-        DSs = [DS_Brown('Datasets/6Brown/{}.pt'.format(args.ds), transform=default_resize_transform, workers=8)]
+        DSs = [DS_Brown('Datasets/6Brown/liberty.pt', transform=None, workers=8)]
+    elif args.ds in ['liberty','notredame','yosemite',
+                     'yosemite_small','yosemite_cl',
+                     'yosemite_cl_times2','yosemite_cl_times3','yosemite_cl_times4','yosemite_cl_times8']:
+        DSs = [DS_Brown(f'Datasets/6Brown/{args.ds}.pt', transform=trans_resize32, workers=8)]
     elif args.ds in ['PS']:
-        DSs = [DS_Brown(c, default_crop_transform, workers=1) for c in glob(pjoin('Datasets/PS-Dataset_trans','*'))]
+        DSs = [DS_Brown(c, trans_crop, workers=1) for c in glob(pjoin('Datasets/PS-Dataset_trans', '*'))]
 
     elif args.ds in ['buckingham_palace','st_peters_square','trevi_fountain','hagia_sophia_interior','brandenburg_gate','colosseum_exterior','prague_old_town_square']:
-        DSs = [DS_Brown('Datasets/Phototourism/{}.pt'.format(args.ds), default_resize_transform, workers=3)]
+        DSs = [DS_Brown(f'Datasets/Phototourism/{args.ds}.pt', trans_resize32, workers=3)]
 
-    elif args.ds in ['trevi_fountain_p200000','trevi_fountain_p400000','trevi_fountain_p800000','trevi_fountain_p1600000']: # DEPRECATED
-        DSs = [DS_Brown('Datasets/Phototourism/{}.pt'.format(args.ds), default_resize_transform, workers=3)]
+    elif args.ds in ['trevi_fountain_p25000','trevi_fountain_p50000','trevi_fountain_p100000','trevi_fountain_p200000','trevi_fountain_p400000',
+                     'trevi_fountain_p800000','trevi_fountain_p1600000','trevi_fountain_p3200000','trevi_fountain_p6400000',
+                     'colosseum_exterior_p1600000_lower','colosseum_exterior_p1600000_upper',
+                     'trevi_fountain_p1600000','trevi_fountain_p1600000_lower','trevi_fountain_p1600000_upper']:
+        DSs = [DS_Brown(f'Datasets/Phototourism/{args.ds}.pt', trans_resize32, workers=3)]
 
-    elif args.ds in ['trevi_fountain_pn25000','trevi_fountain_pn50000','trevi_fountain_pn100000','trevi_fountain_pn200000','trevi_fountain_pn400000',
-                     'trevi_fountain_pn800000','trevi_fountain_pn1600000','trevi_fountain_pn3200000','trevi_fountain_pn6400000']:
-        DSs = [DS_Brown('Datasets/Phototourism/{}.pt'.format(args.ds), default_resize_transform, workers=3)]
+    elif args.ds in ['colosseum_exterior_p1600000_RGB']:
+        DSs = [DS_Brown(f'Datasets/Phototourism/{args.ds}.pt', trans_resize32, workers=3)]
 
     elif args.ds in ['hagia_sophia_interior_p1600000','brandenburg_gate_p1600000','colosseum_exterior_p1600000','buckingham_palace_p1600000','prague_old_town_square_p1600000']:
-        DSs = [DS_Brown('Datasets/Phototourism/{}.pt'.format(args.ds), default_resize_transform, workers=3)]
+        DSs = [DS_Brown(f'Datasets/Phototourism/{args.ds}.pt', trans_resize32, workers=3)]
 
-    elif args.ds in ['colosseum_exterior_pn1600000_lower','colosseum_exterior_pn1600000_upper']:
-        DSs = [DS_Brown('Datasets/Phototourism/{}.pt'.format(args.ds), default_resize_transform, workers=3)]
-
-    elif args.ds in ['hagia_sophia_interior_f0.5+']:
-        DSs = [DS_Brown('Datasets/Phototourism/hagia_sophia_interior_fraction:0.5_higher:True.pt', default_resize_transform, workers=3)]
-    elif args.ds in ['hagia_sophia_interior_f0.5-']:
-        DSs = [DS_Brown('Datasets/Phototourism/hagia_sophia_interior_fraction:0.5_higher:False.pt', default_resize_transform, workers=3)]
-    elif args.ds in ['hagia_sophia_interior_middle']:
-        DSs = [DS_Brown('Datasets/Phototourism/hagia_sophia_interior_middleedges.pt', default_resize_transform, workers=3)]
     elif args.ds in ['PS+lib']:
-        DSs = [DS_Brown(c, default_resize_transform, workers=1) for c in glob(pjoin('Datasets/PS-Dataset_trans','*'))]
-        DSs += [DS_Brown('Datasets/6Brown/liberty.pt', default_resize_transform)]
-        DSs += [DS_Brown('Datasets/6Brown/liberty_harris.pt', default_resize_transform)]
+        DSs = [DS_Brown(c, trans_resize32, workers=1) for c in glob(pjoin('Datasets/PS-Dataset_trans', '*'))]
+        DSs += [DS_Brown('Datasets/6Brown/liberty.pt', trans_resize32)]
+        DSs += [DS_Brown('Datasets/6Brown/liberty_harris.pt', trans_resize32)]
         wrapper = DS_wrapper(DSs, args.tuples, args.batch_size, [1]*(len(DSs)-2)+[(len(DSs)-2)/2]*2)
-    elif args.ds in ['v3']:
-        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v3', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10)]
+    elif args.ds in ['v3','v4','v5']:
+        DSs = [DS_AMOS(f'Datasets/AMOS-views/AMOS-views-{args.ds}', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10)]
     elif args.ds in ['TILDE']:
-        DSs = [DS_AMOS('Datasets/Related_work_AMOS', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen, args.cams_in_batch, workers=10)]
-    elif args.ds in ['v4']:
-        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS, args.patch_gen,
-                       args.cams_in_batch, workers=10)]
+        DSs = [DS_AMOS('Datasets/Related_work_AMOS', data_name, args.patch_sets, args.weight_function, trans_AMOS, args.patch_gen, args.cams_in_batch, workers=10)]
     elif args.ds in ['v4noshift']:
-        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS_resize, args.patch_gen,
-                       args.cams_in_batch, workers=10)]
+        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_crop_resize, args.patch_gen, args.cams_in_batch, workers=10)]
     elif args.ds in ['v4crop']:
-        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS_s, args.patch_gen,
-                       args.cams_in_batch, workers=10)]
-    elif args.ds in ['v4f0.5-']:
-        DSs = [DS_AMOS('','',data_path='Datasets/AMOS-views/AMOS-views-v4/AMOS-views-v4_maxsets:2000_sigmas-v:e011_thr:0.00016_WF:Hessian_PG:new_masks:AMOS-masks_fraction:0.5_higher:False.pt',
-               patch_sets=args.patch_sets, weight_function=args.weight_function, transform=transform_AMOS, patch_gen=args.patch_gen, cams_in_batch=args.cams_in_batch, workers=10)]
-    elif args.ds in ['v4f0.5+']:
-        DSs = [DS_AMOS('','',data_path='Datasets/AMOS-views/AMOS-views-v4/AMOS-views-v4_maxsets:2000_sigmas-v:e011_thr:0.00016_WF:Hessian_PG:new_masks:AMOS-masks_fraction:0.5_higher:True.pt',
-               patch_sets=args.patch_sets, weight_function=args.weight_function, transform=transform_AMOS, patch_gen=args.patch_gen, cams_in_batch=args.cams_in_batch, workers=10)]
-    elif args.ds in ['v4f1']:
-        DSs = [DS_AMOS('','',data_path='Datasets/AMOS-views/AMOS-views-v4/AMOS-views-v4_maxsets:2000_sigmas-v:e011_thr:0.00016_WF:Hessian_PG:new_masks:AMOS-masks_fraction:1_higher:False.pt',
-               patch_sets=args.patch_sets, weight_function=args.weight_function, transform=transform_AMOS, patch_gen=args.patch_gen, cams_in_batch=args.cams_in_batch, workers=10)]
+        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS_s, args.patch_gen, args.cams_in_batch, workers=10)]
     elif args.ds in ['v4crop']:
-        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name=data_name, patch_sets=args.patch_sets, weight_function=args.weight_function,
-                       transform=default_crop_transform, patch_gen=args.patch_gen, cams_in_batch=args.cams_in_batch, workers=10)]
+        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, trans_crop, args.patch_gen, args.cams_in_batch, workers=10)]
     # elif args.ds in ['v4alb']:
     #     DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v4', data_name, args.patch_sets, args.weight_function, transform_AMOS_alb,
     #                    args.patch_gen, args.cams_in_batch, workers=10)]
     #     wrapper = DS_wrapper(DSs, args.tuples, args.batch_size, [1])
-    elif args.ds in ['v5']:
-        DSs = [DS_AMOS('Datasets/AMOS-views/AMOS-views-v5', data_name, args.patch_sets, args.weight_function, transform_AMOS,
-                       args.patch_gen, args.cams_in_batch, workers=10)]
         wrapper = DS_wrapper(DSs, args.tuples, args.batch_size)
     else:
         assert False, 'unknown dataset, specify in datasets.py first'
@@ -610,14 +596,8 @@ def get_train_dataset(args, data_name): # returns dataset wrapper
     if wrapper is None:
         wrapper = DS_wrapper(DSs, args.tuples, args.batch_size)
     wrapper.Npositives = args.Npos
-    if args.K != '': # kornia transform is invoked inside of model
+    if args.K != '': # kornia transform will be invoked inside of model
         printc.red('removing transforms in dataloaders, Kornia in models is turned on')
-        # printc.red('removing transforms in dataloaders (special care with AMOS), turning on Kornia')
         for d in wrapper.datasets:
             d.transform = None
-            # if isinstance(d, DS_AMOS):
-            #     if 'AMOS' in KoT.get_transform_kornia().keys():
-            #         d.transform = None
-            # else:
-            #     d.transform = None
     return wrapper
