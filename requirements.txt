@@ -88,7 +88,7 @@ pyrsistent==0.15.7
 python-dateutil==2.8.1
 pytorch-metric-learning==0.9.78
 pytz==2019.3
-PyYAML==5.3.1
+PyYAML==5.4
 pyzmq==19.0.0
 qtconsole==4.7.2
 QtPy==1.9.0
