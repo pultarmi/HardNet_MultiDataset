@@ -52,7 +52,7 @@ mkl-random==1.1.0
 mkl-service==2.3.0
 multiprocess==0.70.9
 murmurhash==1.0.2
-nbconvert==5.6.1
+nbconvert==6.3.0
 nbdev==0.2.15
 nbformat==5.0.4
 notebook==6.0.3
